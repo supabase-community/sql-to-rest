@@ -449,7 +449,7 @@ describe('select', () => {
         embedding <=> '[1,2,3]'
     `
 
-    await expect(processSql(sql)).rejects.toThrowError('test')
+    await expect(processSql(sql)).rejects.toThrowError("Unsupported operator '<=>'")
   })
 
   test('"and" expression', async () => {
