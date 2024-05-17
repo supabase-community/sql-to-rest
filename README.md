@@ -1,5 +1,8 @@
 # SQL to PostgREST translator
 
+[![Package](https://img.shields.io/npm/v/@supabase/sql-to-rest)](https://www.npmjs.com/package/@supabase/sql-to-rest)
+[![License: MIT](https://img.shields.io/npm/l/@supabase/sql-to-rest)](#license)
+
 TypeScript library that translates SQL queries to the equivalent [PostgREST](https://github.com/PostgREST/postgrest)-compitable HTTP requests and client library code. Works on both browser and server.
 
 ### What is PostgREST?
