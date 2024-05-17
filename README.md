@@ -261,7 +261,6 @@ The rendered JS code is automatically formatted using `prettier`.
 - [x] [`supabase-js`](https://github.com/supabase/supabase-js)
 - [ ] [`supabase-flutter`](https://github.com/supabase/supabase-flutter)
 - [ ] [`supabase-swift`](https://github.com/supabase/supabase-swift)
-- [ ] [`supabase-swift`](https://github.com/supabase/supabase-swift)
 - [ ] [`supabase-py`](https://github.com/supabase-community/supabase-py)
 - [ ] [`supabase-csharp`](https://github.com/supabase-community/postgrest-csharp)
 - [ ] [`supabase-kt`](https://github.com/supabase-community/supabase-kt)
