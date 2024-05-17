@@ -182,7 +182,6 @@ import {
 // ...
 
 const curlCommand = formatCurl('http://localhost:54321/rest/v1', httpRequest);
-// curl http://localhost:54321/rest/v1/books
 ```
 Outputs:
 ```shell
