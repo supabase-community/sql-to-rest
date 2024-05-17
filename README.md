@@ -80,6 +80,9 @@ yarn add @supabase/sql-to-rest
 ```
 
 ## Usage
+
+_Note: This library is pre-1.0, so expect slight API changes over time._
+
 ```js
 import {
   processSql,
