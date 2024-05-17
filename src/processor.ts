@@ -210,7 +210,7 @@ export const supportedAggregateFunctions = ['avg', 'count', 'max', 'min', 'sum']
  * @returns An intermediate `Statement` object that
  * can be rendered to various targets (HTTP, supabase-js, etc).
  */
-export async function processSql(sql: string) {
+export async function processSql(sql: string): Promise<Statement> {
   try {
     const result: ParsedQuery = await parseQuery(sql)
 

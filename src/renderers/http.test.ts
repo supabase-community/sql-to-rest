@@ -4,7 +4,22 @@ import { processSql } from '../processor'
 import { renderHttp } from './http'
 
 describe('select', () => {
-  test('specified columns', async () => {
+  test('select all columns', async () => {
+    const sql = stripIndents`
+      select
+        *
+      from
+        books
+    `
+
+    const statement = await processSql(sql)
+    const { method, fullPath } = await renderHttp(statement)
+
+    expect(method).toBe('GET')
+    expect(fullPath).toBe('/books')
+  })
+
+  test('select specified columns', async () => {
     const sql = stripIndents`
       select
         title,
