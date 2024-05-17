@@ -1101,15 +1101,15 @@ function processJsonTarget(expression: A_Expr, relations: Relations): ColumnTarg
   }
 
   let cast: string | undefined = undefined
-  let left: string
-  let right: string
+  let left: string | number
+  let right: string | number
 
   if ('A_Const' in expression.A_Expr.lexpr) {
-    if ('sval' in expression.A_Expr.lexpr.A_Const) {
-      left = expression.A_Expr.lexpr.A_Const.sval.sval
-    } else {
+    // JSON path cannot contain a float
+    if ('fval' in expression.A_Expr.lexpr.A_Const) {
       throw new UnsupportedError('Invalid JSON path')
     }
+    left = parseConstant(expression.A_Expr.lexpr)
   } else if ('A_Expr' in expression.A_Expr.lexpr) {
     const { column } = processJsonTarget(expression.A_Expr.lexpr, relations)
     left = column
@@ -1120,11 +1120,11 @@ function processJsonTarget(expression: A_Expr, relations: Relations): ColumnTarg
   }
 
   if ('A_Const' in expression.A_Expr.rexpr) {
-    if ('sval' in expression.A_Expr.rexpr.A_Const) {
-      right = expression.A_Expr.rexpr.A_Const.sval.sval
-    } else {
+    // JSON path cannot contain a float
+    if ('fval' in expression.A_Expr.rexpr.A_Const) {
       throw new UnsupportedError('Invalid JSON path')
     }
+    right = parseConstant(expression.A_Expr.rexpr)
   } else if ('TypeCast' in expression.A_Expr.rexpr) {
     cast = renderDataType(expression.A_Expr.rexpr.TypeCast.typeName.names)
 
@@ -1282,11 +1282,13 @@ function validateGroupClause(groupClause: ColumnRef[], targets: Target[], relati
     )
   }
 }
+
 function parseConstant(constant: A_Const) {
   if ('sval' in constant.A_Const) {
     return constant.A_Const.sval.sval
   } else if ('ival' in constant.A_Const) {
-    return constant.A_Const.ival.ival
+    // The PG parser turns 0 into undefined, so convert it back here
+    return constant.A_Const.ival.ival ?? 0
   } else if ('fval' in constant.A_Const) {
     return parseFloat(constant.A_Const.fval.fval)
   } else {

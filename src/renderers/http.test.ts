@@ -1246,6 +1246,43 @@ describe('select', () => {
     expect(fullPath).toBe('/books?select=address->city->>name')
   })
 
+  test('right side of json operator can be an integer index', async () => {
+    const sql = stripIndents`
+      select
+        contributors->'names'->0
+      from
+        books
+    `
+
+    const statement = await processSql(sql)
+    const { method, fullPath } = await renderHttp(statement)
+
+    expect(method).toBe('GET')
+    expect(fullPath).toBe('/books?select=contributors->names->0')
+  })
+
+  test('right side of json operator that is a float fails', async () => {
+    const sql = stripIndents`
+      select
+      contributors->'names'->0.5
+      from
+        books
+    `
+
+    await expect(processSql(sql)).rejects.toThrowError()
+  })
+
+  test('right side of json operator that is a column fails', async () => {
+    const sql = stripIndents`
+      select
+        address->city
+      from
+        books
+    `
+
+    await expect(processSql(sql)).rejects.toThrowError()
+  })
+
   test('select json column with cast', async () => {
     const sql = stripIndents`
       select
