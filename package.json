@@ -1,14 +1,40 @@
 {
   "name": "@supabase/sql-to-rest",
-  "version": "0.0.0",
+  "version": "0.0.4",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "license": "MIT",
+  "homepage": "https://github.com/supabase-community/sql-to-rest#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/supabase-community/sql-to-rest.git"
+  },
+  "bugs": {
+    "url": "https://github.com/supabase-community/sql-to-rest/issues/new/choose"
+  },
+  "keywords": [
+    "SQL",
+    "REST",
+    "PostgREST",
+    "PostgreSQL",
+    "translator"
+  ],
+  "files": [
+    "dist/**/*"
+  ],
+  "exports": {
+    ".": {
+      "import": "./dist/index.mjs",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "sideEffects": false,
   "scripts": {
-    "clean": "rm -rf dist",
-    "build": "tsc -b",
+    "build": "tsup --clean",
     "typecheck": "tsc --noEmit",
-    "test": "NODE_OPTIONS=--experimental-vm-modules jest"
+    "test": "NODE_OPTIONS=--experimental-vm-modules jest",
+    "prepublishOnly": "npm run build"
   },
   "dependencies": {
     "@babel/parser": "^7.24.5",
@@ -26,6 +52,7 @@
     "jest": "^29.7.0",
     "sql-formatter": "^15.0.2",
     "ts-jest": "^29.1.1",
+    "tsup": "^8.0.2",
     "typescript": "^5.4.3"
   }
 }
