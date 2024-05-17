@@ -358,6 +358,100 @@ describe('select', () => {
     expect(fullPath).toBe('/books?category=in.(%22a,b,c%22,%22d,e,f%22)')
   })
 
+  test('between operator', async () => {
+    const sql = stripIndents`
+      select
+        *
+      from
+        books
+      where
+        pages between 10 and 20
+    `
+
+    const statement = await processSql(sql)
+    const { method, fullPath } = await renderHttp(statement)
+
+    expect(method).toBe('GET')
+    expect(fullPath).toBe('/books?pages=gte.10&pages=lte.20')
+  })
+
+  test('between symmetric operator', async () => {
+    const sql = stripIndents`
+      select
+        *
+      from
+        books
+      where
+        pages between symmetric 20 and 10
+    `
+
+    const statement = await processSql(sql)
+    const { method, fullPath } = await renderHttp(statement)
+
+    expect(method).toBe('GET')
+    expect(fullPath).toBe('/books?pages=gte.10&pages=lte.20')
+  })
+
+  test('between symmetric fails if arguments are not numbers', async () => {
+    const sql = stripIndents`
+      select
+        *
+      from
+        books
+      where
+        pages between symmetric '2025' and '2024'
+    `
+
+    await expect(processSql(sql)).rejects.toThrowError()
+  })
+
+  test('not between operator', async () => {
+    const sql = stripIndents`
+      select
+        *
+      from
+        books
+      where
+        pages not between 10 and 20
+    `
+
+    const statement = await processSql(sql)
+    const { method, fullPath } = await renderHttp(statement)
+
+    expect(method).toBe('GET')
+    expect(fullPath).toBe('/books?not.and=(pages.gte.10,pages.lte.20)')
+  })
+
+  test('not between symmetric operator', async () => {
+    const sql = stripIndents`
+      select
+        *
+      from
+        books
+      where
+        pages not between symmetric 20 and 10
+    `
+
+    const statement = await processSql(sql)
+    const { method, fullPath } = await renderHttp(statement)
+
+    expect(method).toBe('GET')
+    expect(fullPath).toBe('/books?not.and=(pages.gte.10,pages.lte.20)')
+  })
+
+  test('unknown operator fails', async () => {
+    const sql = stripIndents`
+      select
+        *
+      from
+        books
+      where
+        embedding <=> '[1,2,3]'
+    `
+
+    await expect(processSql(sql)).rejects.toThrowError('test')
+  })
+
   test('"and" expression', async () => {
     const sql = stripIndents`
       select
