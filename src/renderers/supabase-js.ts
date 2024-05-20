@@ -93,9 +93,22 @@ function renderFilterRoot(lines: string[], filter: Filter) {
 
   if (filter.negate) {
     if (filter.type === 'column') {
-      lines.push(
-        `.not(${JSON.stringify(filter.column)}, ${JSON.stringify(filter.operator)}, ${JSON.stringify(filter.value)})`
-      )
+      // Full-text search operators can have an optional config arg
+      if (
+        filter.operator === 'fts' ||
+        filter.operator === 'plfts' ||
+        filter.operator === 'phfts' ||
+        filter.operator === 'wfts'
+      ) {
+        const maybeConfig = filter.config ? `(${filter.config})` : ''
+        lines.push(
+          `.not(${JSON.stringify(filter.column)}, ${JSON.stringify(`${filter.operator}${maybeConfig}`)}, ${JSON.stringify(filter.value)})`
+        )
+      } else {
+        lines.push(
+          `.not(${JSON.stringify(filter.column)}, ${JSON.stringify(filter.operator)}, ${JSON.stringify(filter.value)})`
+        )
+      }
     }
     // supabase-js doesn't support negated logical operators.
     // We work around this by wrapping the filter in an 'or'
@@ -108,9 +121,28 @@ function renderFilterRoot(lines: string[], filter: Filter) {
 
   // Column filter, eg. .eq('title', 'Cheese')
   if (type === 'column') {
-    lines.push(
-      `.${filter.operator}(${JSON.stringify(filter.column)}, ${JSON.stringify(filter.value)})`
-    )
+    if (
+      filter.operator === 'fts' ||
+      filter.operator === 'plfts' ||
+      filter.operator === 'phfts' ||
+      filter.operator === 'wfts'
+    ) {
+      const maybeOptions =
+        filter.operator !== 'fts' || filter.config !== undefined
+          ? `, ${JSON.stringify({
+              type: mapTextSearchType(filter.operator),
+              config: filter.config,
+            })}`
+          : ''
+
+      lines.push(
+        `.textSearch(${JSON.stringify(filter.column)}, ${JSON.stringify(filter.value)}${maybeOptions})`
+      )
+    } else {
+      lines.push(
+        `.${filter.operator}(${JSON.stringify(filter.column)}, ${JSON.stringify(filter.value)})`
+      )
+    }
   }
 
   // Logical operator filter, eg. .or('title.eq.Cheese,title.eq.Salsa')
@@ -135,15 +167,15 @@ function renderFilterRoot(lines: string[], filter: Filter) {
   }
 }
 
-function formatSelectFilter(filter: Filter): string {
-  const { type } = filter
-  const maybeNot = filter.negate ? 'not.' : ''
-
-  if (type === 'column') {
-    return `${maybeNot}${filter.column}.${filter.operator}.${filter.value}`
-  } else if (type === 'logical') {
-    return `${maybeNot}${filter.operator}(${filter.values.map((subFilter) => formatSelectFilter(subFilter)).join(', ')})`
-  } else {
-    throw new RenderError(`Unknown filter type '${type}'`, 'supabase-js')
+function mapTextSearchType(operator: 'fts' | 'plfts' | 'phfts' | 'wfts') {
+  switch (operator) {
+    case 'plfts':
+      return 'plain'
+    case 'phfts':
+      return 'phrase'
+    case 'wfts':
+      return 'websearch'
+    default:
+      return undefined
   }
 }

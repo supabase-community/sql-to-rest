@@ -11,6 +11,11 @@ export function processWhereClause(expression: WhereExpression, relations: Relat
       throw new UnsupportedError('Only one operator name supported per expression')
     }
 
+    const kind = expression.A_Expr.kind
+    const [name] = expression.A_Expr.name
+    const operatorSymbol = name.String.sval.toLowerCase()
+    const operator = mapOperatorSymbol(kind, operatorSymbol)
+
     if ('A_Expr' in expression.A_Expr.lexpr) {
       try {
         const target = processJsonTarget(expression.A_Expr.lexpr, relations)
@@ -23,14 +28,49 @@ export function processWhereClause(expression: WhereExpression, relations: Relat
       column = renderFields(fields, relations)
     } else if ('TypeCast' in expression.A_Expr.lexpr) {
       throw new UnsupportedError('Casting is not supported in the WHERE clause')
+    } else if ('FuncCall' in expression.A_Expr.lexpr) {
+      const functionName = renderFields(expression.A_Expr.lexpr.FuncCall.funcname, relations)
+
+      // Only 'to_tsvector' function is supported on left side of WHERE clause (when using FTS `@@` operator))
+      if (operator === 'fts') {
+        if (functionName === 'to_tsvector') {
+          if (
+            !expression.A_Expr.lexpr.FuncCall.args ||
+            expression.A_Expr.lexpr.FuncCall.args.length !== 1
+          ) {
+            throw new UnsupportedError(`${functionName} requires 1 column argument`)
+          }
+
+          // We grab the column passed to `to_tsvector` and discard the `to_tsvector` function
+          // We can do this because Postgres will implicitly wrap text columns in `to_tsvector` at query time
+          const [arg] = expression.A_Expr.lexpr.FuncCall.args
+
+          if ('A_Expr' in arg) {
+            try {
+              const target = processJsonTarget(arg, relations)
+              column = target.column
+            } catch (err) {
+              throw new UnsupportedError(`${functionName} requires a column argument`)
+            }
+          } else if ('ColumnRef' in arg) {
+            const { fields } = arg.ColumnRef
+            column = renderFields(fields, relations)
+          } else if ('TypeCast' in arg) {
+            throw new UnsupportedError('Casting is not supported in the WHERE clause')
+          } else {
+            throw new UnsupportedError(`${functionName} requires a column argument`)
+          }
+        } else {
+          throw new UnsupportedError(
+            `Only 'to_tsvector' function allowed on left side of text search operator`
+          )
+        }
+      } else {
+        throw new UnsupportedError(`Left side of WHERE clause must be a column`)
+      }
     } else {
       throw new UnsupportedError(`Left side of WHERE clause must be a column`)
     }
-
-    const kind = expression.A_Expr.kind
-    const [name] = expression.A_Expr.name
-    const operatorSymbol = name.String.sval.toLowerCase()
-    const operator = mapOperatorSymbol(kind, operatorSymbol)
 
     if (
       operator === 'eq' ||
@@ -152,6 +192,61 @@ export function processWhereClause(expression: WhereExpression, relations: Relat
         negate: false,
         value,
       }
+    } else if (operator === 'fts') {
+      const supportedTextSearchFunctions = [
+        'to_tsquery',
+        'plainto_tsquery',
+        'phraseto_tsquery',
+        'websearch_to_tsquery',
+      ]
+
+      if (!('FuncCall' in expression.A_Expr.rexpr)) {
+        throw new UnsupportedError(
+          `Right side of WHERE clause '${operatorSymbol}' expression must be one of these functions: ${supportedTextSearchFunctions.join(', ')}`
+        )
+      }
+
+      const functionName = renderFields(expression.A_Expr.rexpr.FuncCall.funcname, relations)
+
+      if (!supportedTextSearchFunctions.includes(functionName)) {
+        throw new UnsupportedError(
+          `Right side of WHERE clause '${operatorSymbol}' expression must be one of these functions: ${supportedTextSearchFunctions.join(', ')}`
+        )
+      }
+
+      if (
+        !expression.A_Expr.rexpr.FuncCall.args ||
+        expression.A_Expr.rexpr.FuncCall.args.length === 0 ||
+        expression.A_Expr.rexpr.FuncCall.args.length > 2
+      ) {
+        throw new UnsupportedError(`${functionName} requires 1 or 2 arguments`)
+      }
+
+      const args = expression.A_Expr.rexpr.FuncCall.args.map((arg) => {
+        if (!('A_Const' in arg) || !('sval' in arg.A_Const)) {
+          throw new UnsupportedError(`${functionName} only accepts text arguments`)
+        }
+
+        return arg.A_Const.sval.sval
+      })
+
+      // config (eg. 'english') is the first argument if passed
+      const [config] = args.slice(-2, -1)
+
+      // query is always the last argument
+      const [query] = args.slice(-1)
+
+      // Adjust operator based on FTS function
+      const operator = mapTextSearchFunction(functionName)
+
+      return {
+        type: 'column',
+        column,
+        operator,
+        config,
+        value: query,
+        negate: false,
+      }
     } else {
       throw new UnsupportedError(`Unsupported operator '${operatorSymbol}'`)
     }
@@ -229,6 +324,10 @@ function mapOperatorSymbol(kind: A_Expr['A_Expr']['kind'], operatorSymbol: strin
           return 'match'
         case '~*':
           return 'imatch'
+        case '@@':
+          // 'fts' isn't necessarily the final operator (there is also plfts, phfts, wfts)
+          // we adjust this downstream based on the tsquery function used
+          return 'fts'
         default:
           throw new UnsupportedError(`Unsupported operator '${operatorSymbol}'`)
       }
@@ -274,5 +373,23 @@ function mapOperatorSymbol(kind: A_Expr['A_Expr']['kind'], operatorSymbol: strin
           throw new UnsupportedError(`Unsupported operator '${operatorSymbol}'`)
       }
     }
+  }
+}
+
+/**
+ * Maps text search query functions to the respective PostgREST operator.
+ */
+function mapTextSearchFunction(functionName: string) {
+  switch (functionName) {
+    case 'to_tsquery':
+      return 'fts'
+    case 'plainto_tsquery':
+      return 'plfts'
+    case 'phraseto_tsquery':
+      return 'phfts'
+    case 'websearch_to_tsquery':
+      return 'wfts'
+    default:
+      throw new UnsupportedError(`Function '${functionName}' not supported for full-text search`)
   }
 }

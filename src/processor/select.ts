@@ -1,5 +1,6 @@
 import { UnsupportedError } from '../errors'
 import {
+  A_Const,
   A_Expr,
   ColumnRef,
   FromExpression,
@@ -312,7 +313,7 @@ function processTargetList(targetList: SelectResTarget[], relations: Relations):
 }
 
 function processTarget(
-  target: TypeCast | ColumnRef | FuncCall | A_Expr,
+  target: TypeCast | ColumnRef | FuncCall | A_Expr | A_Const,
   relations: Relations
 ): ColumnTarget | AggregateTarget {
   if ('TypeCast' in target) {
@@ -375,6 +376,7 @@ function processColumn(target: ColumnRef, relations: Relations): ColumnTarget {
     column: renderFields(target.ColumnRef.fields, relations),
   }
 }
+
 function processExpression(target: A_Expr, relations: Relations): ColumnTarget {
   try {
     return processJsonTarget(target, relations)
@@ -386,6 +388,7 @@ function processExpression(target: A_Expr, relations: Relations): ColumnTarget {
     throw new UnsupportedError(`Expressions not supported as targets`, maybeJsonHint)
   }
 }
+
 function processFunctionCall(target: FuncCall, relations: Relations): AggregateTarget {
   const functionName = renderFields(target.FuncCall.funcname, relations)
 

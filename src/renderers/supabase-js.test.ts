@@ -378,6 +378,213 @@ describe('select', () => {
     `)
   })
 
+  test('full text search using to_tsquery', async () => {
+    const sql = stripIndents`
+      select
+        *
+      from
+        books
+      where
+        description @@ to_tsquery('cheese')
+    `
+
+    const statement = await processSql(sql)
+    const { code } = await renderSupabaseJs(statement)
+
+    expect(code).toBe(stripIndent`
+      const { data, error } = await supabase
+        .from('books')
+        .select()
+        .textSearch('description', 'cheese')
+    `)
+  })
+
+  test('full text search using plainto_tsquery', async () => {
+    const sql = stripIndents`
+      select
+        *
+      from
+        books
+      where
+        description @@ plainto_tsquery('cheese')
+    `
+
+    const statement = await processSql(sql)
+    const { code } = await renderSupabaseJs(statement)
+
+    expect(code).toBe(stripIndent`
+      const { data, error } = await supabase
+        .from('books')
+        .select()
+        .textSearch('description', 'cheese', {
+          type: 'plain',
+        })
+    `)
+  })
+
+  test('full text search using phraseto_tsquery', async () => {
+    const sql = stripIndents`
+      select
+        *
+      from
+        books
+      where
+        description @@ phraseto_tsquery('cheese')
+    `
+
+    const statement = await processSql(sql)
+    const { code } = await renderSupabaseJs(statement)
+
+    expect(code).toBe(stripIndent`
+      const { data, error } = await supabase
+        .from('books')
+        .select()
+        .textSearch('description', 'cheese', {
+          type: 'phrase',
+        })
+    `)
+  })
+
+  test('full text search using websearch_to_tsquery', async () => {
+    const sql = stripIndents`
+      select
+        *
+      from
+        books
+      where
+        description @@ websearch_to_tsquery('cheese')
+    `
+
+    const statement = await processSql(sql)
+    const { code } = await renderSupabaseJs(statement)
+
+    expect(code).toBe(stripIndent`
+      const { data, error } = await supabase
+        .from('books')
+        .select()
+        .textSearch('description', 'cheese', {
+          type: 'websearch',
+        })
+    `)
+  })
+
+  test('full text search passing config to to_tsquery', async () => {
+    const sql = stripIndents`
+      select
+        *
+      from
+        books
+      where
+        description @@ to_tsquery('english', 'cheese')
+    `
+
+    const statement = await processSql(sql)
+    const { code } = await renderSupabaseJs(statement)
+
+    expect(code).toBe(stripIndent`
+      const { data, error } = await supabase
+        .from('books')
+        .select()
+        .textSearch('description', 'cheese', {
+          config: 'english',
+        })
+    `)
+  })
+
+  test('full text search passing config to to_tsquery', async () => {
+    const sql = stripIndents`
+      select
+        *
+      from
+        books
+      where
+        description @@ to_tsquery('english', 'cheese')
+    `
+
+    const statement = await processSql(sql)
+    const { code } = await renderSupabaseJs(statement)
+
+    expect(code).toBe(stripIndent`
+      const { data, error } = await supabase
+        .from('books')
+        .select()
+        .textSearch('description', 'cheese', {
+          config: 'english',
+        })
+    `)
+  })
+
+  test('negated full text search', async () => {
+    const sql = stripIndents`
+      select
+        *
+      from
+        books
+      where
+        not (description @@ to_tsquery('cheese'))
+    `
+
+    const statement = await processSql(sql)
+    const { code } = await renderSupabaseJs(statement)
+
+    expect(code).toBe(stripIndent`
+      const { data, error } = await supabase
+        .from('books')
+        .select()
+        .not('description', 'fts', 'cheese')
+    `)
+  })
+
+  test('negated full text search with config', async () => {
+    const sql = stripIndents`
+      select
+        *
+      from
+        books
+      where
+        not (description @@ to_tsquery('english', 'cheese'))
+    `
+
+    const statement = await processSql(sql)
+    const { code } = await renderSupabaseJs(statement)
+
+    expect(code).toBe(stripIndent`
+      const { data, error } = await supabase
+        .from('books')
+        .select()
+        .not(
+          'description',
+          'fts(english)',
+          'cheese',
+        )
+    `)
+  })
+
+  test('negated full text search using websearch_to_tsquery and config', async () => {
+    const sql = stripIndents`
+      select
+        *
+      from
+        books
+      where
+        not (description @@ websearch_to_tsquery('english', 'cheese'))
+    `
+
+    const statement = await processSql(sql)
+    const { code } = await renderSupabaseJs(statement)
+
+    expect(code).toBe(stripIndent`
+      const { data, error } = await supabase
+        .from('books')
+        .select()
+        .not(
+          'description',
+          'wfts(english)',
+          'cheese',
+        )
+    `)
+  })
+
   test('"and" expression', async () => {
     const sql = stripIndents`
       select

@@ -85,6 +85,30 @@ export type InColumnFilter = BaseColumnFilter & {
   value: (string | number)[]
 }
 
+export type FtsColumnFilter = BaseColumnFilter & {
+  operator: 'fts'
+  config?: string
+  value: string
+}
+
+export type PlainFtsColumnFilter = BaseColumnFilter & {
+  operator: 'plfts'
+  config?: string
+  value: string
+}
+
+export type PhraseFtsColumnFilter = BaseColumnFilter & {
+  operator: 'phfts'
+  config?: string
+  value: string
+}
+
+export type WebSearchFtsColumnFilter = BaseColumnFilter & {
+  operator: 'wfts'
+  config?: string
+  value: string
+}
+
 export type ColumnFilter =
   | EqColumnFilter
   | NeqColumnFilter
@@ -98,6 +122,10 @@ export type ColumnFilter =
   | ImatchColumnFilter
   | IsColumnFilter
   | InColumnFilter
+  | FtsColumnFilter
+  | PlainFtsColumnFilter
+  | PhraseFtsColumnFilter
+  | WebSearchFtsColumnFilter
 
 export type LogicalFilter = BaseFilter & {
   type: 'logical'

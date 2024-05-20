@@ -405,6 +405,168 @@ describe('select', () => {
     await expect(processSql(sql)).rejects.toThrowError()
   })
 
+  test('full text search using to_tsquery', async () => {
+    const sql = stripIndents`
+      select
+        *
+      from
+        books
+      where
+        description @@ to_tsquery('cheese')
+    `
+
+    const statement = await processSql(sql)
+    const { method, fullPath } = await renderHttp(statement)
+
+    expect(method).toBe('GET')
+    expect(fullPath).toBe('/books?description=fts.cheese')
+  })
+
+  test('full text search using plainto_tsquery', async () => {
+    const sql = stripIndents`
+      select
+        *
+      from
+        books
+      where
+        description @@ plainto_tsquery('cheese')
+    `
+
+    const statement = await processSql(sql)
+    const { method, fullPath } = await renderHttp(statement)
+
+    expect(method).toBe('GET')
+    expect(fullPath).toBe('/books?description=plfts.cheese')
+  })
+
+  test('full text search using phraseto_tsquery', async () => {
+    const sql = stripIndents`
+      select
+        *
+      from
+        books
+      where
+        description @@ phraseto_tsquery('cheese')
+    `
+
+    const statement = await processSql(sql)
+    const { method, fullPath } = await renderHttp(statement)
+
+    expect(method).toBe('GET')
+    expect(fullPath).toBe('/books?description=phfts.cheese')
+  })
+
+  test('full text search using websearch_to_tsquery', async () => {
+    const sql = stripIndents`
+      select
+        *
+      from
+        books
+      where
+        description @@ websearch_to_tsquery('cheese')
+    `
+
+    const statement = await processSql(sql)
+    const { method, fullPath } = await renderHttp(statement)
+
+    expect(method).toBe('GET')
+    expect(fullPath).toBe('/books?description=wfts.cheese')
+  })
+
+  test('full text search passing config to to_tsquery', async () => {
+    const sql = stripIndents`
+      select
+        *
+      from
+        books
+      where
+        description @@ to_tsquery('english', 'cheese')
+    `
+
+    const statement = await processSql(sql)
+    const { method, fullPath } = await renderHttp(statement)
+
+    expect(method).toBe('GET')
+    expect(fullPath).toBe('/books?description=fts(english).cheese')
+  })
+
+  test('full text search using unknown function on right side of operator fails', async () => {
+    const sql = stripIndents`
+      select
+        *
+      from
+        books
+      where
+        description @@ something_else('cheese')
+    `
+
+    await expect(processSql(sql)).rejects.toThrowError()
+  })
+
+  test('full text search on column wrapped in to_tsvector', async () => {
+    const sql = stripIndents`
+      select
+        *
+      from
+        books
+      where
+        to_tsvector(description) @@ to_tsquery('cheese')
+    `
+
+    const statement = await processSql(sql)
+    const { method, fullPath } = await renderHttp(statement)
+
+    expect(method).toBe('GET')
+    expect(fullPath).toBe('/books?description=fts.cheese')
+  })
+
+  test('full text search with json column', async () => {
+    const sql = stripIndents`
+      select
+        *
+      from
+        books
+      where
+        metadata->>'info' @@ to_tsquery('cheese')
+    `
+
+    const statement = await processSql(sql)
+    const { method, fullPath } = await renderHttp(statement)
+
+    expect(method).toBe('GET')
+    expect(fullPath).toBe('/books?metadata->>info=fts.cheese')
+  })
+
+  test('full text search on json column wrapped in to_tsvector', async () => {
+    const sql = stripIndents`
+      select
+        *
+      from
+        books
+      where
+        to_tsvector(metadata->>'info') @@ to_tsquery('cheese')
+    `
+
+    const statement = await processSql(sql)
+    const { method, fullPath } = await renderHttp(statement)
+
+    expect(method).toBe('GET')
+    expect(fullPath).toBe('/books?metadata->>info=fts.cheese')
+  })
+
+  test('full text search on column wrapped in unknown function fails', async () => {
+    const sql = stripIndents`
+      select
+        *
+      from
+        books
+      where
+        something_else(description) @@ to_tsquery('cheese')
+    `
+
+    await expect(processSql(sql)).rejects.toThrowError()
+  })
+
   test('not between operator', async () => {
     const sql = stripIndents`
       select

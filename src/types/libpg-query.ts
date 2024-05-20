@@ -57,8 +57,8 @@ export type A_Expr = {
       | 'AEXPR_BETWEEN_SYM'
       | 'AEXPR_NOT_BETWEEN_SYM'
     name: PgString[]
-    lexpr: A_Const | A_Expr | ColumnRef | TypeCast
-    rexpr: A_Const | A_Expr | ColumnRef | TypeCast | List
+    lexpr: A_Const | A_Expr | ColumnRef | TypeCast | FuncCall
+    rexpr: A_Const | A_Expr | ColumnRef | TypeCast | List | FuncCall
     location: number
   }
 }
@@ -114,7 +114,7 @@ export type List = {
 export type FuncCall = {
   FuncCall: {
     funcname: PgString[]
-    args?: (TypeCast | ColumnRef | FuncCall | A_Expr)[]
+    args?: (TypeCast | ColumnRef | FuncCall | A_Expr | A_Const)[]
     agg_star?: boolean
     funcformat: string
     location: number
