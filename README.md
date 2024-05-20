@@ -273,7 +273,7 @@ The rendered JS code is automatically formatted using `prettier`.
 - [ ] `delete` statements ([`DELETE` requests](https://postgrest.org/en/latest/references/api/tables_views.html#delete))
 - [ ] `explain` statements ([Execution plan](https://postgrest.org/en/latest/references/observability.html#execution-plan))
 
-#### Filters
+#### [Filters](https://postgrest.org/en/latest/references/api/tables_views.html#horizontal-filtering)
 
 ##### Column operators
 
@@ -308,14 +308,14 @@ The rendered JS code is automatically formatted using `prettier`.
 - [ ] `all` (`all`)
 - [ ] `any` (`any`)
 
-#### Sorts (`order by`)
+#### [Ordering](https://postgrest.org/en/latest/references/api/tables_views.html#ordering)
 
 - [x] `asc` (`asc`)
 - [x] `desc` (`desc`)
 - [x] `nulls first` (`nullsfirst`)
 - [x] `nulls last` (`nullslast`)
 
-#### Pagination
+#### [Pagination](https://postgrest.org/en/latest/references/api/pagination_count.html)
 
 - [x] `limit` (`limit`)
 - [x] `offset` (`offset`)
@@ -326,10 +326,10 @@ The rendered JS code is automatically formatted using `prettier`.
 ##### Functions
 
 - [x] `count()`
+- [x] `sum()`
 - [x] `avg()`
 - [x] `max()`
 - [x] `min()`
-- [x] `sum()`
 
 ##### Features
 
@@ -338,11 +338,21 @@ The rendered JS code is automatically formatted using `prettier`.
 - [x] aggregate with `group by`
 - [x] aggregate with `group by` on joined table column
 
-#### Joins ([Resource Embedding](https://postgrest.org/en/latest/references/api/resource_embedding.html))
+#### [Joins](https://postgrest.org/en/latest/references/api/resource_embedding.html) (Resource Embedding)
 
-SQL joins are supported using PostgREST resource embeddings with the [spread](https://postgrest.org/en/latest/references/api/resource_embedding.html#spread-embedded-resource) `...` syntax (flattens joined table into primary table).
+SQL joins are supported using PostgREST resource embeddings with the [spread `...` syntax](https://postgrest.org/en/latest/references/api/resource_embedding.html#spread-embedded-resource) (flattens joined table into primary table).
 
-#### JSON columns
+#### [Aliases](https://postgrest.org/en/latest/references/api/tables_views.html#renaming-columns)
+
+- [x] column aliases
+- [x] table aliases
+
+#### [Casts](https://postgrest.org/en/latest/references/api/tables_views.html#casting-columns)
+
+- [x] column casts (in select target only)
+- [x] aggregate function casts (in select target only)
+
+#### [JSON columns](https://postgrest.org/en/latest/references/api/tables_views.html#json-columns)
 
 JSON columns (eg. `select metadata->'person'->>'name'`) are supported in the following places:
 
