@@ -3,7 +3,7 @@ import * as estree from 'prettier/plugins/estree'
 import * as prettier from 'prettier/standalone'
 import { RenderError } from '../errors'
 import { Filter, Select, Statement } from '../processor'
-import { renderTargets } from './util'
+import { renderNestedFilter, renderTargets } from './util'
 
 export type SupabaseJsQuery = {
   code: string
@@ -45,7 +45,7 @@ async function formatSelect(select: Select): Promise<SupabaseJsQuery> {
   }
 
   if (filter) {
-    formatSelectFilterRoot(lines, filter)
+    renderFilterRoot(lines, filter)
   }
 
   if (sorts) {
@@ -88,7 +88,7 @@ async function formatSelect(select: Select): Promise<SupabaseJsQuery> {
   }
 }
 
-function formatSelectFilterRoot(lines: string[], filter: Filter) {
+function renderFilterRoot(lines: string[], filter: Filter) {
   const { type } = filter
 
   if (filter.negate) {
@@ -99,9 +99,9 @@ function formatSelectFilterRoot(lines: string[], filter: Filter) {
     }
     // supabase-js doesn't support negated logical operators.
     // We work around this by wrapping the filter in an 'or'
-    // with only 1 value
+    // with only 1 value (so the 'or' is a no-op, but we get nested PostgREST syntax)
     else if (filter.type === 'logical') {
-      lines.push(`.or(${JSON.stringify(formatSelectFilter(filter))})`)
+      lines.push(`.or(${JSON.stringify(renderNestedFilter(filter, false, ', '))})`)
     }
     return
   }
@@ -119,13 +119,15 @@ function formatSelectFilterRoot(lines: string[], filter: Filter) {
     // filter as a separate filter method
     if (filter.operator === 'and') {
       for (const subFilter of filter.values) {
-        formatSelectFilterRoot(lines, subFilter)
+        renderFilterRoot(lines, subFilter)
       }
     }
     // Otherwise use the .or(...) method
     else if (filter.operator === 'or') {
       lines.push(
-        `.or(${JSON.stringify(filter.values.map((subFilter) => formatSelectFilter(subFilter)).join(', '))})`
+        `.or(${JSON.stringify(
+          filter.values.map((subFilter) => renderNestedFilter(subFilter, false, ', ')).join(', ')
+        )})`
       )
     }
   } else {

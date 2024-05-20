@@ -1,7 +1,7 @@
 import { stripIndent } from 'common-tags'
 import { RenderError } from '../errors'
 import { Filter, Select, Statement } from '../processor'
-import { renderTargets, uriEncode, uriEncodeParams } from './util'
+import { renderFilter, renderTargets, uriEncode, uriEncodeParams } from './util'
 
 export type HttpRequest = {
   method: 'GET'
@@ -40,7 +40,7 @@ async function formatSelect(select: Select): Promise<HttpRequest> {
   }
 
   if (filter) {
-    formatSelectFilterRoot(params, filter)
+    renderFilterRoot(params, filter)
   }
 
   if (sorts) {
@@ -88,69 +88,20 @@ async function formatSelect(select: Select): Promise<HttpRequest> {
   }
 }
 
-function formatSelectFilterRoot(params: URLSearchParams, filter: Filter) {
+function renderFilterRoot(params: URLSearchParams, filter: Filter) {
   const { type } = filter
-  const maybeNot = filter.negate ? 'not.' : ''
 
-  // Column filter, eg. "title=eq.Cheese"
-  if (type === 'column') {
-    // Convert '%' to URL-safe '*'
-    if (filter.operator === 'like' || filter.operator === 'ilike') {
-      const value = filter.value.replaceAll('%', '*')
-      params.append(filter.column, `${maybeNot}${filter.operator}.${value}`)
-    } else if (filter.operator === 'in') {
-      const value = filter.value
-        .map((value) => {
-          // If an 'in' value contains a comma, wrap in double quotes
-          if (value.toString().includes(',')) {
-            return `"${value}"`
-          }
-          return value
-        })
-        .join(',')
-      params.append(filter.column, `${maybeNot}${filter.operator}.(${value})`)
-    } else {
-      params.append(filter.column, `${maybeNot}${filter.operator}.${filter.value}`)
+  // The `and` operator is a special case where we can format each nested
+  // filter as a separate query param as long as the `and` is not negated
+  if (type === 'logical' && filter.operator === 'and' && !filter.negate) {
+    for (const subFilter of filter.values) {
+      renderFilterRoot(params, subFilter)
     }
   }
-  // Logical operator filter, eg. "or=(title.eq.Cheese,title.eq.Salsa)""
-  else if (type === 'logical') {
-    // The `and` operator is a special case where we can format each nested
-    // filter as a separate query param as long as the `and` is not negated
-    if (filter.operator === 'and' && !filter.negate) {
-      for (const subFilter of filter.values) {
-        formatSelectFilterRoot(params, subFilter)
-      }
-    }
-    // Otherwise use the <operator>=(...) syntax
-    else {
-      params.append(
-        `${maybeNot}${filter.operator}`,
-        `(${filter.values.map((subFilter) => formatSelectFilter(subFilter)).join(',')})`
-      )
-    }
-  } else {
-    throw new RenderError(`Unknown filter type '${type}'`, 'http')
-  }
-}
-
-function formatSelectFilter(filter: Filter): string {
-  const { type } = filter
-  const maybeNot = filter.negate ? 'not.' : ''
-
-  if (type === 'column') {
-    let value = filter.value
-
-    // Convert '%' to URL-safe '*'
-    if (filter.operator === 'like' || filter.operator === 'ilike') {
-      value = filter.value.replaceAll('%', '*')
-    }
-
-    return `${maybeNot}${filter.column}.${filter.operator}.${value}`
-  } else if (type === 'logical') {
-    return `${maybeNot}${filter.operator}(${filter.values.map((subFilter) => formatSelectFilter(subFilter)).join(',')})`
-  } else {
-    throw new RenderError(`Unknown filter type '${type}'`, 'http')
+  // Otherwise render as normal
+  else {
+    const [key, value] = renderFilter(filter)
+    params.append(key, value)
   }
 }
 

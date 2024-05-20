@@ -506,6 +506,25 @@ describe('select', () => {
     expect(fullPath).toBe('/books?or=(title.eq.Cheese,title.eq.Salsa)')
   })
 
+  test('negated column operator', async () => {
+    const sql = stripIndents`
+      select
+        *
+      from
+        books
+      where
+        not (
+          title = 'Cheese'
+        )
+    `
+
+    const statement = await processSql(sql)
+    const { method, fullPath } = await renderHttp(statement)
+
+    expect(method).toBe('GET')
+    expect(fullPath).toBe('/books?title=not.eq.Cheese')
+  })
+
   test('negated "and" expression', async () => {
     const sql = stripIndents`
       select
@@ -544,6 +563,42 @@ describe('select', () => {
 
     expect(method).toBe('GET')
     expect(fullPath).toBe('/books?not.or=(title.eq.Cheese,title.eq.Salsa)')
+  })
+
+  test('"or" expression with negated column operator', async () => {
+    const sql = stripIndents`
+      select
+        *
+      from
+        books
+      where
+        not (title = 'Cheese')
+        or title = 'Salsa'
+    `
+
+    const statement = await processSql(sql)
+    const { method, fullPath } = await renderHttp(statement)
+
+    expect(method).toBe('GET')
+    expect(fullPath).toBe('/books?or=(title.not.eq.Cheese,title.eq.Salsa)')
+  })
+
+  test('"or" expression with in operator', async () => {
+    const sql = stripIndents`
+      select
+        *
+      from
+        books
+      where
+        title in ('Cheese', 'Salsa')
+        or description ilike '%tacos%'
+    `
+
+    const statement = await processSql(sql)
+    const { method, fullPath } = await renderHttp(statement)
+
+    expect(method).toBe('GET')
+    expect(fullPath).toBe('/books?or=(title.in.(Cheese,Salsa),description.ilike.*tacos*)')
   })
 
   test('"and" expression with nested "or"', async () => {

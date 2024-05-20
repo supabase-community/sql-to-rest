@@ -1,4 +1,4 @@
-import { Target } from '../processor'
+import { Filter, Target } from '../processor'
 
 // TODO: format multiline targets downstream instead of here
 export function renderTargets(
@@ -94,6 +94,83 @@ export function renderTargets(
       }
     })
     .join(',' + maybeNewline)
+}
+
+/**
+ * Renders a filter in PostgREST syntax.
+ *
+ * @returns A key-value pair that can be used either directly
+ * in query params (for HTTP rendering), or to render nested
+ * filters (@see `renderNestedFilter`).
+ */
+export function renderFilter(
+  filter: Filter,
+  urlSafe: boolean = true,
+  delimiter = ','
+): [key: string, value: string] {
+  const { type } = filter
+  const maybeNot = filter.negate ? 'not.' : ''
+
+  // Column filter, eg. "title.eq.Cheese"
+  if (type === 'column') {
+    if (filter.operator === 'like' || filter.operator === 'ilike') {
+      // Optionally convert '%' to URL-safe '*'
+      const value = urlSafe ? filter.value.replaceAll('%', '*') : filter.value
+
+      return [filter.column, `${maybeNot}${filter.operator}.${value}`]
+    } else if (filter.operator === 'in') {
+      const value = filter.value
+        .map((value) => {
+          // If an 'in' value contains a comma, wrap in double quotes
+          if (value.toString().includes(',')) {
+            return `"${value}"`
+          }
+          return value
+        })
+        .join(',')
+      return [filter.column, `${maybeNot}${filter.operator}.(${value})`]
+    } else if (
+      filter.operator === 'fts' ||
+      filter.operator === 'plfts' ||
+      filter.operator === 'phfts' ||
+      filter.operator === 'wfts'
+    ) {
+      const maybeConfig = filter.config ? `(${filter.config})` : ''
+      return [filter.column, `${maybeNot}${filter.operator}${maybeConfig}.${filter.value}`]
+    } else {
+      return [filter.column, `${maybeNot}${filter.operator}.${filter.value}`]
+    }
+  }
+  // Logical operator filter, eg. "or(title.eq.Cheese,title.eq.Salsa)""
+  else if (type === 'logical') {
+    return [
+      `${maybeNot}${filter.operator}`,
+      `(${filter.values
+        .map((subFilter) => renderNestedFilter(subFilter, urlSafe, delimiter))
+        .join(delimiter)})`,
+    ]
+  } else {
+    throw new Error(`Unknown filter type '${type}'`)
+  }
+}
+
+/**
+ * Renders a filter in PostgREST syntax with key-values combined
+ * for use within a nested filter.
+ *
+ * @returns A string containing the nested filter.
+ */
+export function renderNestedFilter(filter: Filter, urlSafe: boolean = true, delimiter = ',') {
+  const [key, value] = renderFilter(filter, urlSafe, delimiter)
+  const { type } = filter
+
+  if (type === 'column') {
+    return `${key}.${value}`
+  } else if (type === 'logical') {
+    return `${key}${value}`
+  } else {
+    throw new Error(`Unknown filter type '${type}'`)
+  }
 }
 
 export const defaultCharacterWhitelist = ['*', '(', ')', ',', ':', '!', '>', '-', '[', ']']
