@@ -6,11 +6,13 @@
 TypeScript library that translates SQL queries to the equivalent [PostgREST](https://github.com/PostgREST/postgrest)-compitable HTTP requests and client library code. Works on both browser and server.
 
 ### What is PostgREST?
+
 [PostgREST](https://postgrest.org/) is a REST API that auto-generates endpoints based on relations in your database (`public` schema only by default). It uses JWTs and RLS policies to handle authorization.
 
 ### How can SQL be converted to REST?
 
 The PostgREST API supports a lot of SQL-like features including:
+
 - Vertical filtering (select only the columns you care about)
 - Horizontal filtering (filter rows by comparing data in columns: `=`, `>`, `<`, `in`, `like`, etc)
 - Sorting
@@ -24,7 +26,9 @@ The PostgREST API supports a lot of SQL-like features including:
 This library takes the SQL input and translates it to 1-to-1 to the equivalent PostgREST syntax. Any unsupported SQL will [throw an error](#sql-is-a-very-open-language---how-can-it-all-translate-to-rest).
 
 ### Example
+
 The following SQL:
+
 ```sql
 select
   title,
@@ -44,6 +48,7 @@ offset
 Will get translated to:
 
 _cURL_
+
 ```shell
 curl -G http://localhost:54321/rest/v1/books \
   -d "select=title,description" \
@@ -54,12 +59,14 @@ curl -G http://localhost:54321/rest/v1/books \
 ```
 
 _Raw HTTP_
+
 ```http
 GET /rest/v1/books?select=title,description&description=ilike.*cheese*&order=title.desc&limit=5&offset=10 HTTP/1.1
 Host: localhost:54321
 ```
 
 _supabase-js_
+
 ```js
 const { data, error } = await supabase
   .from('books')
@@ -67,7 +74,7 @@ const { data, error } = await supabase
     `
     title,
     description
-    `,
+    `
   )
   .ilike('description', '%cheese%')
   .order('title', { ascending: false })
@@ -75,9 +82,11 @@ const { data, error } = await supabase
 ```
 
 ## Install
+
 ```shell
 npm i @supabase/sql-to-rest
 ```
+
 ```shell
 yarn add @supabase/sql-to-rest
 ```
@@ -87,11 +96,7 @@ yarn add @supabase/sql-to-rest
 _Note: This library is pre-1.0, so expect slight API changes over time._
 
 ```js
-import {
-  processSql,
-  renderHttp,
-  formatCurl,
-} from '@supabase/sql-to-rest';
+import { processSql, renderHttp, formatCurl } from '@supabase/sql-to-rest'
 
 // Process SQL into intermediate PostgREST AST
 const statement = await processSql(`
@@ -99,39 +104,40 @@ const statement = await processSql(`
     *
   from
     books
-`);
+`)
 
 // Render the AST into an HTTP request
-const httpRequest = await renderHttp(statement);
+const httpRequest = await renderHttp(statement)
 
 // Format the HTTP request as a cURL command (requires base URL)
-const curlCommand = formatCurl('http://localhost:54321/rest/v1', httpRequest);
+const curlCommand = formatCurl('http://localhost:54321/rest/v1', httpRequest)
 
-console.log(curlCommand);
+console.log(curlCommand)
 // curl http://localhost:54321/rest/v1/books
 
 // Or use it directly
 const response = await fetch(`http://localhost:54321/rest/v1${httpRequest.fullPath}`, {
-  method: httpRequest.method
-});
-
+  method: httpRequest.method,
+})
 ```
 
 ### `processSql()`
+
 Takes a SQL string and converts it into a PostgREST abstract syntax tree (AST) called a `Statement`. This is an intermediate object that can later be rendered to your language/protocol of choice.
 
 ```js
-import { processSql } from '@supabase/sql-to-rest';
+import { processSql } from '@supabase/sql-to-rest'
 
 const statement = await processSql(`
   select
     *
   from
     books
-`);
+`)
 ```
 
 Outputs a `Promise<Statement>`:
+
 ```js
 {
   type: 'select',
@@ -150,22 +156,24 @@ Outputs a `Promise<Statement>`:
 ```
 
 ### `renderHttp()`
+
 Takes the intermediate `Statement` and renders it as an HTTP request.
 
 ```js
-import { processSql, renderHttp } from '@supabase/sql-to-rest';
+import { processSql, renderHttp } from '@supabase/sql-to-rest'
 
 const statement = await processSql(`
   select
     *
   from
     books
-`);
+`)
 
 const httpRequest = await renderHttp(statement)
 ```
 
 Outputs a `Promise<HttpRequest>`:
+
 ```js
 {
   method: 'GET',
@@ -183,63 +191,66 @@ An `HttpRequest` can also be formatted as a `cURL` command or as raw HTTP.
 import {
   // ...
   formatCurl,
-} from '@supabase/sql-to-rest';
+} from '@supabase/sql-to-rest'
 
 // ...
 
-const curlCommand = formatCurl('http://localhost:54321/rest/v1', httpRequest);
+const curlCommand = formatCurl('http://localhost:54321/rest/v1', httpRequest)
 ```
+
 Outputs:
+
 ```shell
 curl http://localhost:54321/rest/v1/books
 ```
 
 #### Raw HTTP
+
 ```js
 import {
   // ...
   formatHttp,
-} from '@supabase/sql-to-rest';
+} from '@supabase/sql-to-rest'
 
 // ...
 
-const rawHttp = formatHttp('http://localhost:54321/rest/v1', httpRequest);
+const rawHttp = formatHttp('http://localhost:54321/rest/v1', httpRequest)
 ```
 
 Outputs:
+
 ```http
 GET /rest/v1/books HTTP/1.1
 Host: localhost:54321
 ```
 
-
 ### `renderSupabaseJs()`
+
 Takes the intermediate `Statement` and renders it as [`supabase-js`](https://github.com/supabase/supabase-js) client code.
 
 ```js
-import { processSql, renderSupabaseJs } from '@supabase/sql-to-rest';
+import { processSql, renderSupabaseJs } from '@supabase/sql-to-rest'
 
 const statement = await processSql(`
   select
     *
   from
     books
-`);
+`)
 
 const { code } = await renderSupabaseJs(statement)
 ```
 
 Outputs a `Promise<SupabaseJsQuery>`, where `code` contains:
+
 ```js
-const { data, error } = await supabase
-  .from('books')
-  .select()
+const { data, error } = await supabase.from('books').select()
 ```
 
 The rendered JS code is automatically formatted using `prettier`.
 
-
 ## How does it work?
+
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="./assets/diagram-dark.png">
   <img alt="SQL to REST diagram" src="./assets/diagram-light.png">
@@ -250,14 +261,97 @@ The rendered JS code is automatically formatted using `prettier`.
 3. The intermediate PostgREST AST can be rendered to your language/protocol of choice. Currently supports HTTP (with `cURL` and raw HTTP formatters), and [`supabase-js`](https://github.com/supabase/supabase-js) code (which wraps PostgREST). Other languages are on the roadmap (PR's welcome!)
 
 ## Roadmap
+
 ### SQL features
-- [x] `select` statements
-- [ ] `insert` statements
-- [ ] `update` statements
-- [ ] `delete` statements
-- [ ] `explain` statements
+
+#### Statements
+
+- [x] `select` statements ([`GET` requests](https://postgrest.org/en/latest/references/api/tables_views.html#read))
+- [ ] `insert` statements ([`POST` requests](https://postgrest.org/en/latest/references/api/tables_views.html#insert))
+  - [ ] `on conflict update` ([upsert](https://postgrest.org/en/latest/references/api/tables_views.html#upsert))
+- [ ] `update` statements ([`PATCH` requests](https://postgrest.org/en/latest/references/api/tables_views.html#update))
+- [ ] `delete` statements ([`DELETE` requests](https://postgrest.org/en/latest/references/api/tables_views.html#delete))
+- [ ] `explain` statements ([Execution plan](https://postgrest.org/en/latest/references/observability.html#execution-plan))
+
+#### Filters
+
+##### Column operators
+
+- [x] `=` (`eq`)
+- [x] `>` (`gt`)
+- [x] `>=` (`gte`)
+- [x] `<` (`lt`)
+- [x] `<=` (`lte`)
+- [x] `<>` or `!=` (`neq`)
+- [x] `like` (`like`)
+- [x] `ilike` (`ilike`)
+- [x] `~` (`match`)
+- [x] `~*` (`imatch`)
+- [x] `in` (`in`)
+- [ ] `is` (`is`): _partial support, only `is null` for now_
+- [ ] `is distinct from` (`isdistinct`)
+- [x] `@@` (`fts`, `plfts`, `phfts`, `wfts`)
+- [ ] `@>` (`cs`)
+- [ ] `<@` (`cd`)
+- [ ] `&&` (`ov`)
+- [ ] `<<` (`sl`)
+- [ ] `>>` (`sr`)
+- [ ] `&<` (`nxr`)
+- [ ] `&>` (`nxl`)
+- [ ] `-|-` (`adj`)
+
+##### Logical operators
+
+- [x] `not` (`not`)
+- [x] `or` (`or`)
+- [x] `and` (`and`)
+- [ ] `all` (`all`)
+- [ ] `any` (`any`)
+
+#### Sorts (`order by`)
+
+- [x] `asc` (`asc`)
+- [x] `desc` (`desc`)
+- [x] `nulls first` (`nullsfirst`)
+- [x] `nulls last` (`nullslast`)
+
+#### Pagination
+
+- [x] `limit` (`limit`)
+- [x] `offset` (`offset`)
+- [ ] HTTP range headers
+
+#### [Aggregates](https://postgrest.org/en/latest/references/api/aggregate_functions.html)
+
+##### Functions
+
+- [x] `count()`
+- [x] `avg()`
+- [x] `max()`
+- [x] `min()`
+- [x] `sum()`
+
+##### Features
+
+- [x] aggregate over entire table
+- [x] aggregate on joined table column
+- [x] aggregate with `group by`
+- [x] aggregate with `group by` on joined table column
+
+#### Joins ([Resource Embedding](https://postgrest.org/en/latest/references/api/resource_embedding.html))
+
+SQL joins are supported using PostgREST resource embeddings with the [spread](https://postgrest.org/en/latest/references/api/resource_embedding.html#spread-embedded-resource) `...` syntax (flattens joined table into primary table).
+
+#### JSON columns
+
+JSON columns (eg. `select metadata->'person'->>'name'`) are supported in the following places:
+
+- [x] select targets
+- [x] filters
+- [x] sorts
 
 ### Renderers
+
 - [x] HTTP
   - [x] cURL formatter
   - [x] Raw HTTP formatter
@@ -271,17 +365,21 @@ The rendered JS code is automatically formatted using `prettier`.
 ## FAQs
 
 ### Are you parsing SQL from scratch?
+
 Thankfully no. We use [`libpg-query-node`](https://github.com/launchql/libpg-query-node) which takes source code from the real PostgreSQL parser and wraps it in JavaScript bindings. It compiles the C code into WASM for browser environments and uses native NAPI bindings for server environments.
 
 This means we never have to worry about the SQL itself getting parsed incorrectly - it uses the exact same code as the actual PostgreSQL database. This library uses code from PostgreSQL 15.
 
 ### SQL is a very open language - how can it all translate to REST?
+
 It can't. PostgREST only supports a subset of SQL-like features (by design), so this library only translates features that can be mapped 1-to-1.
 
 When it detects SQL that doesn't translate (eg. sub-queries), it will throw an `UnsupportedError` with a description of exactly what couldn't be translated.
 
 ### How can I be confident that my SQL is translating correctly?
+
 We've built [unit tests](./src/renderers/http.test.ts) for every feature supported. The vast majority of PostgREST features have been implemented, but it doesn't cover 100% yet (see [Roadmap](#roadmap)). If you discover an error in the translation, please [submit an issue](https://github.com/supabase-community/sql-to-rest/issues/new/choose).
 
 ## License
+
 MIT
