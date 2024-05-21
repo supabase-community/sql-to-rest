@@ -1,5 +1,6 @@
 # SQL to PostgREST translator
 
+[![Tests](https://github.com/supabase-community/sql-to-rest/actions/workflows/test.yml/badge.svg)](https://github.com/supabase-community/sql-to-rest/actions?query=branch%3Amain)
 [![Package](https://img.shields.io/npm/v/@supabase/sql-to-rest)](https://www.npmjs.com/package/@supabase/sql-to-rest)
 [![License: MIT](https://img.shields.io/npm/l/@supabase/sql-to-rest)](#license)
 
