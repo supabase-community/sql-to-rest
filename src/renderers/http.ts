@@ -80,7 +80,8 @@ async function formatSelect(select: Select): Promise<HttpRequest> {
     path,
     params,
     get fullPath() {
-      if (params.size > 0) {
+      // params.size not available in older runtimes
+      if (Array.from(params).length > 0) {
         return `${path}?${uriEncodeParams(params)}`
       }
       return path
