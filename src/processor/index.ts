@@ -6,7 +6,7 @@ import { Statement } from './types'
 
 export { supportedAggregateFunctions } from './select'
 export * from './types'
-export { flattenTargets } from './util'
+export { everyTarget, flattenTargets, someFilter, someTarget } from './util'
 
 /**
  * Coverts SQL into a PostgREST-compatible `Statement`.
