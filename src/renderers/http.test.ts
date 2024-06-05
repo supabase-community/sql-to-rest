@@ -35,6 +35,17 @@ describe('select', () => {
     expect(fullPath).toBe('/books?select=title,description')
   })
 
+  test('select distinct fails', async () => {
+    const sql = stripIndents`
+      select
+        distinct category
+      from
+        books
+    `
+
+    await expect(processSql(sql)).rejects.toThrowError()
+  })
+
   test('inline target expression fails', async () => {
     const sql = stripIndents`
       select

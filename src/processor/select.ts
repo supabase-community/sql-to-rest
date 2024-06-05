@@ -40,6 +40,10 @@ export function processSelectStatement(stmt: SelectStmt): Select {
     throw new UnsupportedError('CTEs are not supported')
   }
 
+  if (stmt.SelectStmt.distinctClause) {
+    throw new UnsupportedError('SELECT DISTINCT is not supported')
+  }
+
   if (stmt.SelectStmt.havingClause) {
     throw new UnsupportedError('The HAVING clause is not supported')
   }
