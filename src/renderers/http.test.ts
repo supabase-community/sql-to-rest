@@ -1181,7 +1181,7 @@ describe('select', () => {
     await expect(processSql(sql)).rejects.toThrowError()
   })
 
-  test('join on aliased relation', async () => {
+  test('join on aliased relation strips alias when spread', async () => {
     const sql = stripIndents`
       select
         *,
@@ -1191,13 +1191,19 @@ describe('select', () => {
       join
         authors as a
           on author_id = a.id
+      where
+        a.name = 'Bob'
+      order by
+        a.name
     `
 
     const statement = await processSql(sql)
     const { method, fullPath } = await renderHttp(statement)
 
     expect(method).toBe('GET')
-    expect(fullPath).toBe('/books?select=*,...a:authors!inner(name)')
+    expect(fullPath).toBe(
+      '/books?select=*,...authors!inner(name)&authors.name=eq.Bob&order=authors(name)'
+    )
   })
 
   test('join using primary relation in qualifier', async () => {
@@ -1235,7 +1241,7 @@ describe('select', () => {
     const { method, fullPath } = await renderHttp(statement)
 
     expect(method).toBe('GET')
-    expect(fullPath).toBe('/books?select=*,...a:authors!inner(name)')
+    expect(fullPath).toBe('/books?select=*,...authors!inner(name)')
   })
 
   // TODO: add support for recursive relationships
@@ -1438,7 +1444,7 @@ describe('select', () => {
 
     expect(method).toBe('GET')
     expect(fullPath).toBe(
-      '/books?select=*,...author:authors!inner(name,...editor:editors!inner()),...viewer:viewers!inner()'
+      '/books?select=*,...authors!inner(name,...editors!inner()),...viewers!inner()'
     )
   })
 
@@ -1456,7 +1462,26 @@ describe('select', () => {
     const { method, fullPath } = await renderHttp(statement)
 
     expect(method).toBe('GET')
-    expect(fullPath).toBe('/books?select=...author:authors(*)')
+    expect(fullPath).toBe('/books?select=...authors(*)')
+  })
+
+  test('joined table order by', async () => {
+    const sql = stripIndents`
+      select
+        books.*
+      from
+        books
+      join authors author
+        on author_id = author.id
+      order by
+        author.name desc
+    `
+
+    const statement = await processSql(sql)
+    const { method, fullPath } = await renderHttp(statement)
+
+    expect(method).toBe('GET')
+    expect(fullPath).toBe('/books?select=*,...authors!inner()&order=authors(name).desc')
   })
 
   test('select json column', async () => {
@@ -1752,7 +1777,7 @@ describe('select', () => {
     const { method, fullPath } = await renderHttp(statement)
 
     expect(method).toBe('GET')
-    expect(fullPath).toBe('/orders?select=amount.sum(),...customer:customers!inner(region)')
+    expect(fullPath).toBe('/orders?select=amount.sum(),...customers!inner(region)')
   })
 
   test('aggregate on a joined column', async () => {

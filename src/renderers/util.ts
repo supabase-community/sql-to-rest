@@ -76,7 +76,8 @@ export function renderTargets(
           value = `${value}!inner`
         }
 
-        if (alias && alias !== relation) {
+        // Resource embeddings can't have aliases when they're spread (flattened)
+        if (alias && alias !== relation && !flatten) {
           value = `${alias}:${value}`
         }
 

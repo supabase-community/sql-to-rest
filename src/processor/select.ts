@@ -266,7 +266,9 @@ function processTargetList(targetList: SelectResTarget[], relations: Relations):
 
     // If this column is part of a joined relation
     if (relationName) {
-      const embeddedTarget = relations.joined.find((t) => (t.alias ?? t.relation) === relationName)
+      const embeddedTarget = relations.joined.find(
+        (t) => (t.alias && !t.flatten ? t.alias : t.relation) === relationName
+      )
 
       if (!embeddedTarget) {
         throw new UnsupportedError(

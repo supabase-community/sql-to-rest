@@ -16,7 +16,7 @@ export function processSortClause(sorts: SortBy[], relations: Relations): Sort[]
       }
     } else if ('ColumnRef' in sortBy.SortBy.node) {
       const { fields } = sortBy.SortBy.node.ColumnRef
-      column = renderFields(fields, relations)
+      column = renderFields(fields, relations, 'parenthesis')
     } else if ('TypeCast' in sortBy.SortBy.node) {
       throw new UnsupportedError('Casting is not supported in the ORDER BY clause')
     } else {

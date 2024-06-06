@@ -21,7 +21,7 @@ export function validateGroupClause(
 
         const path = parent
           ? // joined columns have to be prefixed with their relation
-            [parent.alias ?? parent.relation, target.column]
+            [parent.alias && !parent.flatten ? parent.alias : parent.relation, target.column]
           : // top-level columns will have no prefix
             [target.column]
 
@@ -42,7 +42,7 @@ export function validateGroupClause(
 
       const path = parent
         ? // joined columns have to be prefixed with their relation
-          [parent.alias ?? parent.relation, target.column]
+          [parent.alias && !parent.flatten ? parent.alias : parent.relation, target.column]
         : // top-level columns will have no prefix
           [target.column]
 

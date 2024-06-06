@@ -70,7 +70,11 @@ export function processJsonTarget(expression: A_Expr, relations: Relations): Col
   }
 }
 
-export function renderFields(fields: Field[], relations: Relations) {
+export function renderFields(
+  fields: Field[],
+  relations: Relations,
+  syntax: 'dot' | 'parenthesis' = 'dot'
+) {
   // Get qualified column name segments, eg. `author.name` -> ['author', 'name']
   const nameSegments = fields.map((field) => {
     if ('String' in field) {
@@ -84,20 +88,36 @@ export function renderFields(fields: Field[], relations: Relations) {
   })
 
   // Relation and column names are last two parts of the qualified name
-  const [relationName] = nameSegments.slice(-2, -1)
+  const [relationOrAliasName] = nameSegments.slice(-2, -1)
   const [columnName] = nameSegments.slice(-1)
 
+  const joinedRelation = relations.joined.find(
+    (t) => (t.alias ?? t.relation) === relationOrAliasName
+  )
+
   // If the column is prefixed with the primary relation, strip the prefix
-  if (!relationName || relationName === relations.primary.reference) {
+  if (!relationOrAliasName || relationOrAliasName === relations.primary.reference) {
     return columnName
   }
   // If it's prefixed with a joined relation in the FROM clause, keep the relation prefix
-  else if (relations.joined.some((t) => (t.alias ?? t.relation) === relationName)) {
-    return [relationName, columnName].join('.')
+  else if (joinedRelation) {
+    // Joined relations that are spread don't support aliases, so we will
+    // convert the alias back to the original relation name in this case
+    const joinedRelationName = joinedRelation.flatten
+      ? joinedRelation.relation
+      : relationOrAliasName
+
+    if (syntax === 'dot') {
+      return [joinedRelationName, columnName].join('.')
+    } else if (syntax === 'parenthesis') {
+      return `${joinedRelationName}(${columnName})`
+    } else {
+      throw new Error(`Unknown render syntax '${syntax}'`)
+    }
   }
   // If it's prefixed with an unknown relation, throw an error
   else {
-    const qualifiedName = [relationName, columnName].join('.')
+    const qualifiedName = [relationOrAliasName, columnName].join('.')
 
     throw new UnsupportedError(
       `Found foreign column '${qualifiedName}' without a join to that relation`,
