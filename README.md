@@ -257,7 +257,7 @@ The rendered JS code is automatically formatted using `prettier`.
   <img alt="SQL to REST diagram" src="./assets/diagram-light.png">
 </picture>
 
-1. The SQL string is parsed into a PostgreSQL abstract syntax tree (AST) using [`libpg-query-node`](https://github.com/launchql/libpg-query-node), a JavaScript SQL parser that uses C code from the official PostgreSQL codebase (compiled to WASM for browser targets, NAPI for Node targets). Supports Postgres 15 syntax.
+1. The SQL string is parsed into a PostgreSQL abstract syntax tree (AST) using [`pg-parser`](https://github.com/supabase-community/pg-parser), a JavaScript SQL parser that uses C code from the official PostgreSQL codebase (compiled to WASM). Supports Postgres 17 syntax.
 2. The PostgreSQL AST is translated into a much smaller and simpler PostgREST AST. Since PostgREST supports a subset of SQL syntax, any unsupported SQL operation will throw an `UnsupportedError` with a description of exactly what wasn't supported.
 3. The intermediate PostgREST AST can be rendered to your language/protocol of choice. Currently supports HTTP (with `cURL` and raw HTTP formatters), and [`supabase-js`](https://github.com/supabase/supabase-js) code (which wraps PostgREST). Other languages are on the roadmap (PR's welcome!)
 
@@ -377,7 +377,7 @@ JSON columns (eg. `select metadata->'person'->>'name'`) are supported in the fol
 
 ### Are you parsing SQL from scratch?
 
-Thankfully no. We use [`libpg-query-node`](https://github.com/launchql/libpg-query-node) which takes source code from the real PostgreSQL parser and wraps it in JavaScript bindings. It compiles the C code into WASM for browser environments and uses native NAPI bindings for server environments.
+Thankfully no. We use [`pg-parser`](https://github.com/supabase-community/pg-parser) which compiles source code from the real PostgreSQL parser to WASM and wraps it in JavaScript bindings.
 
 This means we never have to worry about the SQL itself getting parsed incorrectly - it uses the exact same code as the actual PostgreSQL database. This library uses code from PostgreSQL 15.
 
