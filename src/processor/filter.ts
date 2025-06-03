@@ -1,34 +1,62 @@
-import { UnsupportedError } from '../errors'
-import { A_Expr, WhereExpression } from '../types/libpg-query'
-import { ColumnFilter, Filter, Relations } from './types'
-import { parseConstant, processJsonTarget, renderFields } from './util'
+import type { A_Expr_Kind, Node } from '@supabase/pg-parser/17/types'
+import { UnsupportedError } from '../errors.js'
+import type { ColumnFilter, Filter, Relations } from './types.js'
+import { parseConstant, processJsonTarget, renderFields } from './util.js'
 
-export function processWhereClause(expression: WhereExpression, relations: Relations): Filter {
+export function processWhereClause(expression: Node, relations: Relations): Filter {
   if ('A_Expr' in expression) {
     let column: string
 
-    if (expression.A_Expr.name.length > 1) {
+    if (!expression.A_Expr.name || expression.A_Expr.name.length > 1) {
       throw new UnsupportedError('Only one operator name supported per expression')
     }
 
     const kind = expression.A_Expr.kind
+
+    if (!kind) {
+      throw new UnsupportedError('WHERE clause must have an operator kind')
+    }
+
     const [name] = expression.A_Expr.name
+
+    if (!name) {
+      throw new UnsupportedError('WHERE clause must have an operator name')
+    }
+
+    if (!('String' in name)) {
+      throw new UnsupportedError('WHERE clause operator name must be a string')
+    }
+
+    if (!name.String.sval) {
+      throw new UnsupportedError('WHERE clause operator name cannot be empty')
+    }
+
     const operatorSymbol = name.String.sval.toLowerCase()
     const operator = mapOperatorSymbol(kind, operatorSymbol)
 
+    if (!expression.A_Expr.lexpr) {
+      throw new UnsupportedError('Left side of WHERE clause must be a column or expression')
+    }
+
     if ('A_Expr' in expression.A_Expr.lexpr) {
       try {
-        const target = processJsonTarget(expression.A_Expr.lexpr, relations)
+        const target = processJsonTarget(expression.A_Expr.lexpr.A_Expr, relations)
         column = target.column
       } catch (err) {
         throw new UnsupportedError(`Left side of WHERE clause must be a column`)
       }
     } else if ('ColumnRef' in expression.A_Expr.lexpr) {
       const { fields } = expression.A_Expr.lexpr.ColumnRef
+      if (!fields || fields.length === 0) {
+        throw new UnsupportedError(`Left side of WHERE clause must reference a column`)
+      }
       column = renderFields(fields, relations)
     } else if ('TypeCast' in expression.A_Expr.lexpr) {
       throw new UnsupportedError('Casting is not supported in the WHERE clause')
     } else if ('FuncCall' in expression.A_Expr.lexpr) {
+      if (!expression.A_Expr.lexpr.FuncCall.funcname) {
+        throw new UnsupportedError(`Left side of WHERE clause must reference a column`)
+      }
       const functionName = renderFields(expression.A_Expr.lexpr.FuncCall.funcname, relations)
 
       // Only 'to_tsvector' function is supported on left side of WHERE clause (when using FTS `@@` operator))
@@ -45,15 +73,22 @@ export function processWhereClause(expression: WhereExpression, relations: Relat
           // We can do this because Postgres will implicitly wrap text columns in `to_tsvector` at query time
           const [arg] = expression.A_Expr.lexpr.FuncCall.args
 
+          if (!arg) {
+            throw new UnsupportedError(`${functionName} requires a column argument`)
+          }
+
           if ('A_Expr' in arg) {
             try {
-              const target = processJsonTarget(arg, relations)
+              const target = processJsonTarget(arg.A_Expr, relations)
               column = target.column
             } catch (err) {
               throw new UnsupportedError(`${functionName} requires a column argument`)
             }
           } else if ('ColumnRef' in arg) {
             const { fields } = arg.ColumnRef
+            if (!fields) {
+              throw new UnsupportedError(`${functionName} requires a column argument`)
+            }
             column = renderFields(fields, relations)
           } else if ('TypeCast' in arg) {
             throw new UnsupportedError('Casting is not supported in the WHERE clause')
@@ -80,6 +115,12 @@ export function processWhereClause(expression: WhereExpression, relations: Relat
       operator === 'lt' ||
       operator === 'lte'
     ) {
+      if (!expression.A_Expr.rexpr) {
+        throw new UnsupportedError(
+          `Right side of WHERE clause '${operatorSymbol}' expression must be present`
+        )
+      }
+
       if (!('A_Const' in expression.A_Expr.rexpr)) {
         throw new UnsupportedError(
           `Right side of WHERE clause '${operatorSymbol}' expression must be a constant`,
@@ -87,7 +128,7 @@ export function processWhereClause(expression: WhereExpression, relations: Relat
         )
       }
 
-      const value = parseConstant(expression.A_Expr.rexpr)
+      const value = parseConstant(expression.A_Expr.rexpr.A_Const)
       return {
         type: 'column',
         column,
@@ -103,15 +144,29 @@ export function processWhereClause(expression: WhereExpression, relations: Relat
       operator === 'not between' ||
       operator === 'not between symmetric'
     ) {
-      if (!('List' in expression.A_Expr.rexpr) || expression.A_Expr.rexpr.List.items.length !== 2) {
+      if (!expression.A_Expr.rexpr) {
+        throw new UnsupportedError(
+          `Right side of WHERE clause '${operatorSymbol}' expression must be present`
+        )
+      }
+
+      if (
+        !('List' in expression.A_Expr.rexpr) ||
+        expression.A_Expr.rexpr.List.items?.length !== 2
+      ) {
         throw new UnsupportedError(
           `Right side of WHERE clause '${operatorSymbol}' expression must contain two constants`
         )
       }
 
-      let [leftValue, rightValue] = expression.A_Expr.rexpr.List.items.map((item) =>
-        parseConstant(item)
-      )
+      let [leftValue, rightValue] = expression.A_Expr.rexpr.List.items.map((item) => {
+        if (!('A_Const' in item)) {
+          throw new UnsupportedError(
+            `Right side of WHERE clause '${operatorSymbol}' expression must contain two constants`
+          )
+        }
+        return parseConstant(item.A_Const)
+      })
 
       // 'between symmetric' doesn't care which argument comes first order-wise,
       // ie. it auto swaps the arguments if the left value is greater than the right value
@@ -130,12 +185,24 @@ export function processWhereClause(expression: WhereExpression, relations: Relat
         }
       }
 
+      if (!leftValue) {
+        throw new UnsupportedError(
+          `Left side of WHERE clause '${operatorSymbol}' expression must be a constant`
+        )
+      }
+
       const leftFilter: ColumnFilter = {
         type: 'column',
         column,
         operator: 'gte',
         negate: false,
         value: leftValue,
+      }
+
+      if (!rightValue) {
+        throw new UnsupportedError(
+          `Right side of WHERE clause '${operatorSymbol}' expression must be a constant`
+        )
       }
 
       const rightFilter: ColumnFilter = {
@@ -158,7 +225,17 @@ export function processWhereClause(expression: WhereExpression, relations: Relat
       operator === 'match' ||
       operator === 'imatch'
     ) {
-      if (!('A_Const' in expression.A_Expr.rexpr) || !('sval' in expression.A_Expr.rexpr.A_Const)) {
+      if (!expression.A_Expr.rexpr) {
+        throw new UnsupportedError(
+          `Right side of WHERE clause '${operatorSymbol}' expression must be present`
+        )
+      }
+
+      if (
+        !('A_Const' in expression.A_Expr.rexpr) ||
+        !('sval' in expression.A_Expr.rexpr.A_Const) ||
+        !expression.A_Expr.rexpr.A_Const.sval?.sval
+      ) {
         throw new UnsupportedError(
           `Right side of WHERE clause '${operator}' expression must be a string constant`
         )
@@ -174,16 +251,22 @@ export function processWhereClause(expression: WhereExpression, relations: Relat
         value,
       }
     } else if (operator === 'in') {
+      if (!expression.A_Expr.rexpr) {
+        throw new UnsupportedError(
+          `Right side of WHERE clause '${operatorSymbol}' expression must be present`
+        )
+      }
+
       if (
         !('List' in expression.A_Expr.rexpr) ||
-        !expression.A_Expr.rexpr.List.items.every((item) => 'A_Const' in item)
+        !expression.A_Expr.rexpr.List.items?.every((item) => 'A_Const' in item)
       ) {
         throw new UnsupportedError(
           `Right side of WHERE clause '${operator}' expression must be a list of constants`
         )
       }
 
-      const value = expression.A_Expr.rexpr.List.items.map((item) => parseConstant(item))
+      const value = expression.A_Expr.rexpr.List.items.map((item) => parseConstant(item.A_Const))
 
       return {
         type: 'column',
@@ -200,7 +283,13 @@ export function processWhereClause(expression: WhereExpression, relations: Relat
         'websearch_to_tsquery',
       ]
 
-      if (!('FuncCall' in expression.A_Expr.rexpr)) {
+      if (!expression.A_Expr.rexpr) {
+        throw new UnsupportedError(
+          `Right side of WHERE clause '${operatorSymbol}' expression must be present`
+        )
+      }
+
+      if (!('FuncCall' in expression.A_Expr.rexpr) || !expression.A_Expr.rexpr.FuncCall.funcname) {
         throw new UnsupportedError(
           `Right side of WHERE clause '${operatorSymbol}' expression must be one of these functions: ${supportedTextSearchFunctions.join(', ')}`
         )
@@ -223,7 +312,7 @@ export function processWhereClause(expression: WhereExpression, relations: Relat
       }
 
       const args = expression.A_Expr.rexpr.FuncCall.args.map((arg) => {
-        if (!('A_Const' in arg) || !('sval' in arg.A_Const)) {
+        if (!('A_Const' in arg) || !arg.A_Const.sval?.sval) {
           throw new UnsupportedError(`${functionName} only accepts text arguments`)
         }
 
@@ -235,6 +324,10 @@ export function processWhereClause(expression: WhereExpression, relations: Relat
 
       // query is always the last argument
       const [query] = args.slice(-1)
+
+      if (!query) {
+        throw new UnsupportedError(`${functionName} requires a query argument`)
+      }
 
       // Adjust operator based on FTS function
       const operator = mapTextSearchFunction(functionName)
@@ -251,7 +344,15 @@ export function processWhereClause(expression: WhereExpression, relations: Relat
       throw new UnsupportedError(`Unsupported operator '${operatorSymbol}'`)
     }
   } else if ('NullTest' in expression) {
+    if (!expression.NullTest.arg || !('ColumnRef' in expression.NullTest.arg)) {
+      throw new UnsupportedError(`NullTest expression must have an argument of type ColumnRef`)
+    }
+
     const { fields } = expression.NullTest.arg.ColumnRef
+
+    if (!fields) {
+      throw new UnsupportedError(`NullTest expression must reference a column`)
+    }
 
     const column = renderFields(fields, relations)
     const negate = expression.NullTest.nulltesttype === 'IS_NOT_NULL'
@@ -278,6 +379,10 @@ export function processWhereClause(expression: WhereExpression, relations: Relat
       throw new UnsupportedError(`Unknown boolop '${expression.BoolExpr.boolop}'`)
     }
 
+    if (!expression.BoolExpr.args) {
+      throw new UnsupportedError(`BoolExpr must have arguments`)
+    }
+
     const values = expression.BoolExpr.args.map((arg) => processWhereClause(arg, relations))
 
     // The 'not' operator is special - instead of wrapping its child,
@@ -288,7 +393,12 @@ export function processWhereClause(expression: WhereExpression, relations: Relat
           `NOT expressions must have only 1 child, but received ${values.length} children`
         )
       }
+
       const [filter] = values
+      if (!filter) {
+        throw new UnsupportedError(`NOT expression must have a child filter`)
+      }
+
       filter.negate = true
       return filter
     }
@@ -304,7 +414,7 @@ export function processWhereClause(expression: WhereExpression, relations: Relat
   }
 }
 
-function mapOperatorSymbol(kind: A_Expr['A_Expr']['kind'], operatorSymbol: string) {
+function mapOperatorSymbol(kind: A_Expr_Kind, operatorSymbol: string) {
   switch (kind) {
     case 'AEXPR_OP': {
       switch (operatorSymbol) {

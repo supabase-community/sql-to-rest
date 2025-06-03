@@ -1,4 +1,4 @@
-import { Filter, Target } from '../processor'
+import type { Filter, Target } from '../processor/index.js'
 
 // TODO: format multiline targets downstream instead of here
 export function renderTargets(

@@ -1,6 +1,6 @@
-import { UnsupportedError } from '../errors'
-import { A_Const, A_Expr, Field, PgString } from '../types/libpg-query'
-import {
+import type { A_Const, A_Expr, Node, String } from '@supabase/pg-parser/17/types'
+import { UnsupportedError } from '../errors.js'
+import type {
   AggregateTarget,
   ColumnFilter,
   ColumnTarget,
@@ -8,15 +8,28 @@ import {
   Filter,
   Relations,
   Target,
-} from './types'
+} from './types.js'
 
 export function processJsonTarget(expression: A_Expr, relations: Relations): ColumnTarget {
-  if (expression.A_Expr.name.length > 1) {
+  if (!expression.name || expression.name.length === 0) {
+    throw new UnsupportedError('JSON operator must have a name')
+  }
+
+  if (expression.name.length > 1) {
     throw new UnsupportedError('Only one operator name supported per expression')
   }
 
-  const [name] = expression.A_Expr.name
+  const [name] = expression.name
+
+  if (!('String' in name!)) {
+    throw new UnsupportedError('JSON operator name must be a string')
+  }
+
   const operator = name.String.sval
+
+  if (!operator) {
+    throw new UnsupportedError('JSON operator name cannot be empty')
+  }
 
   if (!['->', '->>'].includes(operator)) {
     throw new UnsupportedError(`Invalid JSON operator`)
@@ -26,33 +39,61 @@ export function processJsonTarget(expression: A_Expr, relations: Relations): Col
   let left: string | number
   let right: string | number
 
-  if ('A_Const' in expression.A_Expr.lexpr) {
+  if (!expression.lexpr) {
+    throw new UnsupportedError('JSON path must have a left expression')
+  }
+
+  if ('A_Const' in expression.lexpr) {
     // JSON path cannot contain a float
-    if ('fval' in expression.A_Expr.lexpr.A_Const) {
+    if ('fval' in expression.lexpr.A_Const) {
       throw new UnsupportedError('Invalid JSON path')
     }
-    left = parseConstant(expression.A_Expr.lexpr)
-  } else if ('A_Expr' in expression.A_Expr.lexpr) {
-    const { column } = processJsonTarget(expression.A_Expr.lexpr, relations)
+    left = parseConstant(expression.lexpr.A_Const)
+  } else if ('A_Expr' in expression.lexpr) {
+    const { column } = processJsonTarget(expression.lexpr.A_Expr, relations)
     left = column
-  } else if ('ColumnRef' in expression.A_Expr.lexpr) {
-    left = renderFields(expression.A_Expr.lexpr.ColumnRef.fields, relations)
+  } else if ('ColumnRef' in expression.lexpr) {
+    if (!expression.lexpr.ColumnRef.fields) {
+      throw new UnsupportedError('JSON path must have a column reference')
+    }
+    left = renderFields(expression.lexpr.ColumnRef.fields, relations)
   } else {
     throw new UnsupportedError('Invalid JSON path')
   }
 
-  if ('A_Const' in expression.A_Expr.rexpr) {
+  if (!expression.rexpr || !expression.rexpr) {
+    throw new UnsupportedError('JSON path must have a right expression')
+  }
+
+  if ('A_Const' in expression.rexpr) {
     // JSON path cannot contain a float
-    if ('fval' in expression.A_Expr.rexpr.A_Const) {
+    if ('fval' in expression.rexpr.A_Const) {
       throw new UnsupportedError('Invalid JSON path')
     }
-    right = parseConstant(expression.A_Expr.rexpr)
-  } else if ('TypeCast' in expression.A_Expr.rexpr) {
-    cast = renderDataType(expression.A_Expr.rexpr.TypeCast.typeName.names)
+    right = parseConstant(expression.rexpr.A_Const)
+  } else if ('TypeCast' in expression.rexpr) {
+    if (!expression.rexpr.TypeCast.typeName?.names) {
+      throw new UnsupportedError('Type cast must have a name')
+    }
+    cast = renderDataType(
+      expression.rexpr.TypeCast.typeName.names.map((n) => {
+        if (!('String' in n)) {
+          throw new UnsupportedError('Type cast name must be a string')
+        }
+        return n.String
+      })
+    )
 
-    if ('A_Const' in expression.A_Expr.rexpr.TypeCast.arg) {
-      if ('sval' in expression.A_Expr.rexpr.TypeCast.arg.A_Const) {
-        right = expression.A_Expr.rexpr.TypeCast.arg.A_Const.sval.sval
+    if (!expression.rexpr.TypeCast.arg) {
+      throw new UnsupportedError('Type cast must have an argument')
+    }
+
+    if ('A_Const' in expression.rexpr.TypeCast.arg) {
+      if ('sval' in expression.rexpr.TypeCast.arg.A_Const) {
+        if (!expression.rexpr.TypeCast.arg.A_Const.sval?.sval) {
+          throw new UnsupportedError('Type cast argument cannot be empty')
+        }
+        right = expression.rexpr.TypeCast.arg.A_Const.sval.sval
       } else {
         throw new UnsupportedError('Invalid JSON path')
       }
@@ -71,10 +112,10 @@ export function processJsonTarget(expression: A_Expr, relations: Relations): Col
 }
 
 export function renderFields(
-  fields: Field[],
+  fields: Node[],
   relations: Relations,
   syntax: 'dot' | 'parenthesis' = 'dot'
-) {
+): string {
   // Get qualified column name segments, eg. `author.name` -> ['author', 'name']
   const nameSegments = fields.map((field) => {
     if ('String' in field) {
@@ -97,6 +138,9 @@ export function renderFields(
 
   // If the column is prefixed with the primary relation, strip the prefix
   if (!relationOrAliasName || relationOrAliasName === relations.primary.reference) {
+    if (!columnName) {
+      throw new UnsupportedError('Column name cannot be empty')
+    }
     return columnName
   }
   // If it's prefixed with a joined relation in the FROM clause, keep the relation prefix
@@ -126,15 +170,23 @@ export function renderFields(
   }
 }
 
-export function renderDataType(names: PgString[]) {
+export function renderDataType(names: String[]) {
   const [first, ...rest] = names
 
-  if (first.String.sval === 'pg_catalog' && rest.length === 1) {
+  if (!first) {
+    throw new UnsupportedError('Data type must have a name')
+  }
+
+  if (first.sval === 'pg_catalog' && rest.length === 1) {
     const [name] = rest
+
+    if (!name) {
+      throw new UnsupportedError('Data type must have a name')
+    }
 
     // The PG parser converts some data types, eg. int -> pg_catalog.int4
     // so we'll map those back
-    switch (name.String.sval) {
+    switch (name.sval) {
       case 'int2':
         return 'smallint'
       case 'int4':
@@ -144,25 +196,34 @@ export function renderDataType(names: PgString[]) {
       case 'float8':
         return 'float'
       default:
-        return name.String.sval
+        return name.sval
     }
   } else if (rest.length > 0) {
     throw new UnsupportedError(
       `Casts can only reference data types by their unqualified name (not schema-qualified)`
     )
   } else {
-    return first.String.sval
+    return first.sval
   }
 }
 
 export function parseConstant(constant: A_Const) {
-  if ('sval' in constant.A_Const) {
-    return constant.A_Const.sval.sval
-  } else if ('ival' in constant.A_Const) {
+  if ('sval' in constant) {
+    if (constant.sval?.sval === undefined) {
+      throw new UnsupportedError('Constant value cannot be empty')
+    }
+    return constant.sval.sval
+  } else if ('ival' in constant) {
+    if (constant.ival === undefined) {
+      throw new UnsupportedError('Constant value cannot be undefined')
+    }
     // The PG parser turns 0 into undefined, so convert it back here
-    return constant.A_Const.ival.ival ?? 0
-  } else if ('fval' in constant.A_Const) {
-    return parseFloat(constant.A_Const.fval.fval)
+    return constant.ival.ival ?? 0
+  } else if ('fval' in constant) {
+    if (constant.fval?.fval === undefined) {
+      throw new UnsupportedError('Constant value cannot be undefined')
+    }
+    return parseFloat(constant.fval.fval)
   } else {
     throw new UnsupportedError(`Constant values must be a string, integer, or float`)
   }

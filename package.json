@@ -4,6 +4,7 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "license": "MIT",
+  "type": "module",
   "homepage": "https://github.com/supabase-community/sql-to-rest#readme",
   "repository": {
     "type": "git",
@@ -33,26 +34,21 @@
   "scripts": {
     "build": "tsup --clean",
     "typecheck": "tsc --noEmit",
-    "test": "NODE_OPTIONS=--experimental-vm-modules jest",
+    "test": "vitest",
     "prepublishOnly": "npm run build"
   },
   "dependencies": {
     "@babel/parser": "^7.24.5",
-    "libpg-query": "^15.1.0",
+    "@supabase/pg-parser": "^0.1.1",
     "prettier": "^3.2.5"
   },
   "devDependencies": {
-    "@babel/core": "^7.23.6",
-    "@babel/preset-env": "^7.23.6",
-    "@jest/globals": "^29.7.0",
+    "@total-typescript/tsconfig": "^1.0.4",
     "@types/common-tags": "^1.8.4",
-    "babel-jest": "^29.7.0",
-    "babel-plugin-transform-import-meta": "^2.2.1",
     "common-tags": "^1.8.2",
-    "jest": "^29.7.0",
     "sql-formatter": "^15.0.2",
-    "ts-jest": "^29.1.1",
     "tsup": "^8.0.2",
-    "typescript": "^5.4.3"
+    "typescript": "^5.4.3",
+    "vitest": "^3.2.0"
   }
 }
