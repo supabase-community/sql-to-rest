@@ -1,15 +1,19 @@
-import { UnsupportedError } from '../errors'
-import { ColumnRef } from '../types/libpg-query'
-import { Relations, Target } from './types'
-import { everyTarget, renderFields, someTarget } from './util'
+import type { ColumnRef } from '@supabase/pg-parser/17/types'
+import { UnsupportedError } from '../errors.js'
+import type { Relations, Target } from './types.js'
+import { everyTarget, renderFields, someTarget } from './util.js'
 
 export function validateGroupClause(
   groupClause: ColumnRef[],
   targets: Target[],
   relations: Relations
 ) {
-  const groupByColumns =
-    groupClause.map((columnRef) => renderFields(columnRef.ColumnRef.fields, relations)) ?? []
+  const groupByColumns = groupClause.map((columnRef) => {
+    if (!columnRef.fields) {
+      throw new UnsupportedError('Group by clause must contain at least one column')
+    }
+    return renderFields(columnRef.fields, relations) ?? []
+  })
 
   if (
     !groupByColumns.every((column) =>

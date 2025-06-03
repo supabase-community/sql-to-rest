@@ -1,5 +1,5 @@
 export class ParsingError extends Error {
-  name = 'ParsingError'
+  override name = 'ParsingError'
 
   constructor(
     message: string,
@@ -10,11 +10,11 @@ export class ParsingError extends Error {
 }
 
 export class UnimplementedError extends Error {
-  name = 'UnimplementedError'
+  override name = 'UnimplementedError'
 }
 
 export class UnsupportedError extends Error {
-  name = 'UnsupportedError'
+  override name = 'UnsupportedError'
 
   constructor(
     message: string,
@@ -25,7 +25,7 @@ export class UnsupportedError extends Error {
 }
 
 export class RenderError extends Error {
-  name = 'RenderError'
+  override name = 'RenderError'
 
   constructor(
     message: string,
@@ -36,7 +36,15 @@ export class RenderError extends Error {
 }
 
 export function sentenceCase(value: string) {
-  return value[0].toUpperCase() + value.slice(1)
+  if (typeof value !== 'string') {
+    throw new TypeError('Expected a string')
+  }
+
+  if (value.length === 0) {
+    return value
+  }
+
+  return value[0]!.toUpperCase() + value.slice(1)
 }
 
 /**

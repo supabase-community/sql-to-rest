@@ -1,7 +1,7 @@
 import { stripIndent } from 'common-tags'
-import { RenderError } from '../errors'
-import { Filter, Select, Statement } from '../processor'
-import { renderFilter, renderTargets, uriEncode, uriEncodeParams } from './util'
+import { RenderError } from '../errors.js'
+import type { Filter, Select, Statement } from '../processor/index.js'
+import { renderFilter, renderTargets, uriEncode, uriEncodeParams } from './util.js'
 
 export type HttpRequest = {
   method: 'GET'
@@ -31,8 +31,8 @@ async function formatSelect(select: Select): Promise<HttpRequest> {
 
     // Exclude "select=*" if it's the only target
     if (
-      firstTarget.type !== 'column-target' ||
-      firstTarget.column !== '*' ||
+      firstTarget!.type !== 'column-target' ||
+      firstTarget!.column !== '*' ||
       targets.length !== 1
     ) {
       params.set('select', renderTargets(targets))

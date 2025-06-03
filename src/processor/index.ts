@@ -1,12 +1,19 @@
-import { parseQuery } from 'libpg-query'
-import { ParsingError, UnimplementedError, UnsupportedError, getParsingErrorHint } from '../errors'
-import { ParsedQuery, Stmt } from '../types/libpg-query'
-import { processSelectStatement } from './select'
-import { Statement } from './types'
+import { PgParser, unwrapParseResult } from '@supabase/pg-parser'
+import type { RawStmt } from '@supabase/pg-parser/17/types'
+import {
+  ParsingError,
+  UnimplementedError,
+  UnsupportedError,
+  getParsingErrorHint,
+} from '../errors.js'
+import { processSelectStatement } from './select.js'
+import type { Statement } from './types.js'
 
-export { supportedAggregateFunctions } from './select'
-export * from './types'
-export { everyTarget, flattenTargets, someFilter, someTarget } from './util'
+export { supportedAggregateFunctions } from './select.js'
+export * from './types.js'
+export { everyTarget, flattenTargets, someFilter, someTarget } from './util.js'
+
+const parser = new PgParser()
 
 /**
  * Coverts SQL into a PostgREST-compatible `Statement`.
@@ -18,9 +25,9 @@ export { everyTarget, flattenTargets, someFilter, someTarget } from './util'
  */
 export async function processSql(sql: string): Promise<Statement> {
   try {
-    const result: ParsedQuery = await parseQuery(sql)
+    const result = await unwrapParseResult(parser.parse(sql))
 
-    if (result.stmts.length === 0) {
+    if (!result.stmts || result.stmts.length === 0) {
       throw new UnsupportedError('Expected a statement, but received none')
     }
 
@@ -28,9 +35,15 @@ export async function processSql(sql: string): Promise<Statement> {
       throw new UnsupportedError('Expected a single statement, but received multiple')
     }
 
-    const [statement] = result.stmts.map((stmt) => processStatement(stmt))
+    const [statement] = result.stmts.map((stmt) => {
+      if (!stmt) {
+        throw new UnsupportedError('Expected a statement, but received an empty one')
+      }
 
-    return statement
+      return processStatement(stmt)
+    })
+
+    return statement!
   } catch (err) {
     if (err instanceof Error && 'cursorPosition' in err) {
       const hint = getParsingErrorHint(err.message)
@@ -47,9 +60,13 @@ export async function processSql(sql: string): Promise<Statement> {
 /**
  * Converts a pg-query `Stmt` into a PostgREST-compatible `Statement`.
  */
-function processStatement({ stmt }: Stmt): Statement {
+function processStatement({ stmt }: RawStmt): Statement {
+  if (!stmt) {
+    throw new UnsupportedError('Expected a statement, but received an empty one')
+  }
+
   if ('SelectStmt' in stmt) {
-    return processSelectStatement(stmt)
+    return processSelectStatement(stmt.SelectStmt)
   } else if ('InsertStmt' in stmt) {
     throw new UnimplementedError(`Insert statements are not yet implemented by the translator`)
   } else if ('UpdateStmt' in stmt) {
@@ -60,6 +77,9 @@ function processStatement({ stmt }: Stmt): Statement {
     throw new UnimplementedError(`Explain statements are not yet implemented by the translator`)
   } else {
     const [stmtType] = Object.keys(stmt)
+    if (!stmtType) {
+      throw new UnsupportedError('Expected a statement, but received an empty one')
+    }
     const statementType = stmtType.replace(/Stmt$/, '')
     throw new UnsupportedError(`${statementType} statements are not supported`)
   }

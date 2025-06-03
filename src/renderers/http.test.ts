@@ -1,7 +1,7 @@
-import { describe, expect, test } from '@jest/globals'
 import { stripIndents } from 'common-tags'
-import { processSql } from '../processor'
-import { renderHttp } from './http'
+import { describe, expect, test } from 'vitest'
+import { processSql } from '../processor/index.js'
+import { renderHttp } from './http.js'
 
 describe('select', () => {
   test('select all columns', async () => {

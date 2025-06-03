@@ -1,20 +1,19 @@
-import { UnsupportedError } from '../errors'
-import {
-  A_Const,
+import type {
   A_Expr,
   ColumnRef,
-  FromExpression,
   FuncCall,
-  PgString,
-  SelectResTarget,
+  Node,
+  ResTarget,
   SelectStmt,
+  String,
   TypeCast,
-} from '../types/libpg-query'
-import { validateGroupClause } from './aggregate'
-import { processWhereClause } from './filter'
-import { processLimit } from './limit'
-import { processSortClause } from './sort'
-import {
+} from '@supabase/pg-parser/17/types'
+import { UnsupportedError } from '../errors.js'
+import { validateGroupClause } from './aggregate.js'
+import { processWhereClause } from './filter.js'
+import { processLimit } from './limit.js'
+import { processSortClause } from './sort.js'
+import type {
   AggregateTarget,
   ColumnTarget,
   EmbeddedTarget,
@@ -22,47 +21,80 @@ import {
   Relations,
   Select,
   Target,
-} from './types'
-import { processJsonTarget, renderDataType, renderFields } from './util'
+} from './types.js'
+import { processJsonTarget, renderDataType, renderFields } from './util.js'
 
 export const supportedAggregateFunctions = ['avg', 'count', 'max', 'min', 'sum']
 
 export function processSelectStatement(stmt: SelectStmt): Select {
-  if (!stmt.SelectStmt.fromClause) {
+  if (!stmt) {
+    throw new UnsupportedError('Expected a statement, but received an empty one')
+  }
+
+  if (!stmt.fromClause) {
     throw new UnsupportedError('The query must have a from clause')
   }
 
-  if (stmt.SelectStmt.fromClause.length > 1) {
+  if (!stmt.targetList) {
+    throw new UnsupportedError('The query must have a target list')
+  }
+
+  if (stmt.fromClause.length > 1) {
     throw new UnsupportedError('Only one FROM source is supported')
   }
 
-  if (stmt.SelectStmt.withClause) {
+  if (stmt.withClause) {
     throw new UnsupportedError('CTEs are not supported')
   }
 
-  if (stmt.SelectStmt.distinctClause) {
+  if (stmt.distinctClause) {
     throw new UnsupportedError('SELECT DISTINCT is not supported')
   }
 
-  if (stmt.SelectStmt.havingClause) {
+  if (stmt.havingClause) {
     throw new UnsupportedError('The HAVING clause is not supported')
   }
 
-  const [fromClause] = stmt.SelectStmt.fromClause
+  const [fromClause] = stmt.fromClause
+
+  if (!fromClause) {
+    throw new UnsupportedError('The FROM clause must have a relation')
+  }
 
   const relations = processFromClause(fromClause)
 
   const from = relations.primary.name
 
-  const targets = processTargetList(stmt.SelectStmt.targetList, relations)
+  const targetList = stmt.targetList.map((node) => {
+    if (!('ResTarget' in node)) {
+      throw new UnsupportedError('Target list must contain ResTarget nodes')
+    }
+    return node.ResTarget
+  })
 
-  validateGroupClause(stmt.SelectStmt.groupClause ?? [], targets, relations)
+  const targets = processTargetList(targetList, relations)
 
-  const filter = stmt.SelectStmt.whereClause
-    ? processWhereClause(stmt.SelectStmt.whereClause, relations)
-    : undefined
+  const groupByColumns =
+    stmt.groupClause?.map((node) => {
+      if (!('ColumnRef' in node)) {
+        throw new UnsupportedError('Group by clause must contain column references')
+      }
+      return node.ColumnRef
+    }) ?? []
 
-  const sorts = processSortClause(stmt.SelectStmt.sortClause ?? [], relations)
+  validateGroupClause(groupByColumns, targets, relations)
+
+  const filter = stmt.whereClause ? processWhereClause(stmt.whereClause, relations) : undefined
+
+  const sortByColumns =
+    stmt.sortClause?.map((sortBy) => {
+      if (!('SortBy' in sortBy)) {
+        throw new UnsupportedError('Sort clause must contain SortBy nodes')
+      }
+      return sortBy.SortBy
+    }) ?? []
+
+  const sorts = processSortClause(sortByColumns, relations)
 
   const limit = processLimit(stmt)
 
@@ -76,8 +108,12 @@ export function processSelectStatement(stmt: SelectStmt): Select {
   }
 }
 
-function processFromClause(fromClause: FromExpression): Relations {
+function processFromClause(fromClause: Node): Relations {
   if ('RangeVar' in fromClause) {
+    if (!fromClause.RangeVar.relname) {
+      throw new UnsupportedError('The FROM clause must have a relation name')
+    }
+
     return {
       primary: {
         name: fromClause.RangeVar.relname,
@@ -89,8 +125,19 @@ function processFromClause(fromClause: FromExpression): Relations {
       joined: [],
     }
   } else if ('JoinExpr' in fromClause) {
+    if (!fromClause.JoinExpr.jointype) {
+      throw new UnsupportedError('Join expression must have a join type')
+    }
+
+    if (!fromClause.JoinExpr.larg || !fromClause.JoinExpr.rarg) {
+      throw new UnsupportedError('Join expression must have both left and right relations')
+    }
     const joinType = mapJoinType(fromClause.JoinExpr.jointype)
     const { primary, joined } = processFromClause(fromClause.JoinExpr.larg)
+
+    if (!('RangeVar' in fromClause.JoinExpr.rarg)) {
+      throw new UnsupportedError('Join expression must have a right relation of type RangeVar')
+    }
 
     const joinedRelationAlias = fromClause.JoinExpr.rarg.RangeVar.alias?.aliasname
     const joinedRelation = joinedRelationAlias ?? fromClause.JoinExpr.rarg.RangeVar.relname
@@ -101,7 +148,7 @@ function processFromClause(fromClause: FromExpression): Relations {
       joinedRelation,
     ]
 
-    if (!('A_Expr' in fromClause.JoinExpr.quals)) {
+    if (!fromClause.JoinExpr.quals || !('A_Expr' in fromClause.JoinExpr.quals)) {
       throw new UnsupportedError(`Join qualifier must be an expression comparing columns`)
     }
 
@@ -110,13 +157,14 @@ function processFromClause(fromClause: FromExpression): Relations {
 
     const joinQualifierExpression = fromClause.JoinExpr.quals.A_Expr
 
-    if (!('ColumnRef' in joinQualifierExpression.lexpr)) {
+    if (!joinQualifierExpression.lexpr || !('ColumnRef' in joinQualifierExpression.lexpr)) {
       throw new UnsupportedError(`Left side of join qualifier must be a column`)
     }
 
     if (
+      !joinQualifierExpression.lexpr.ColumnRef.fields ||
       !joinQualifierExpression.lexpr.ColumnRef.fields.every(
-        (field): field is PgString => 'String' in field
+        (field): field is { String: String } => 'String' in field
       )
     ) {
       throw new UnsupportedError(`Left side column of join qualifier must contain String fields`)
@@ -130,6 +178,10 @@ function processFromClause(fromClause: FromExpression): Relations {
     const [leftRelationName] = leftColumnFields.slice(-2, -1)
     const [leftColumnName] = leftColumnFields.slice(-1)
 
+    if (!leftColumnName) {
+      throw new UnsupportedError(`Left side of join qualifier must have a column name`)
+    }
+
     if (!leftRelationName) {
       leftQualifierRelation = primary.reference
     } else if (existingRelations.includes(leftRelationName)) {
@@ -142,13 +194,17 @@ function processFromClause(fromClause: FromExpression): Relations {
       )
     }
 
+    if (!joinQualifierExpression.rexpr) {
+      throw new UnsupportedError(`Join qualifier must have a right side expression`)
+    }
+
     if (!('ColumnRef' in joinQualifierExpression.rexpr)) {
       throw new UnsupportedError(`Right side of join qualifier must be a column`)
     }
 
     if (
-      !joinQualifierExpression.rexpr.ColumnRef.fields.every(
-        (field): field is PgString => 'String' in field
+      !joinQualifierExpression.rexpr.ColumnRef.fields?.every(
+        (field): field is { String: String } => 'String' in field
       )
     ) {
       throw new UnsupportedError(`Right side column of join qualifier must contain String fields`)
@@ -161,6 +217,10 @@ function processFromClause(fromClause: FromExpression): Relations {
     // Relation and column names are last two parts of the qualified name
     const [rightRelationName] = rightColumnFields.slice(-2, -1)
     const [rightColumnName] = rightColumnFields.slice(-1)
+
+    if (!rightColumnName) {
+      throw new UnsupportedError(`Right side of join qualifier must have a column name`)
+    }
 
     if (!rightRelationName) {
       rightQualifierRelation = primary.reference
@@ -183,7 +243,15 @@ function processFromClause(fromClause: FromExpression): Relations {
       throw new UnsupportedError(`Join qualifier must reference a column from the joined table`)
     }
 
+    if (!joinQualifierExpression.name) {
+      throw new UnsupportedError(`Join qualifier must have an operator`)
+    }
+
     const [qualifierOperatorString] = joinQualifierExpression.name
+
+    if (!qualifierOperatorString || !('String' in qualifierOperatorString)) {
+      throw new UnsupportedError(`Join qualifier operator must be a string`)
+    }
 
     if (qualifierOperatorString.String.sval !== '=') {
       throw new UnsupportedError(`Join qualifier operator must be '='`)
@@ -213,6 +281,10 @@ function processFromClause(fromClause: FromExpression): Relations {
       }
     }
 
+    if (!fromClause.JoinExpr.rarg.RangeVar.relname) {
+      throw new UnsupportedError('Join expression must have a right relation name')
+    }
+
     const embeddedTarget: EmbeddedTarget = {
       type: 'embedded-target',
       relation: fromClause.JoinExpr.rarg.RangeVar.relname,
@@ -236,11 +308,15 @@ function processFromClause(fromClause: FromExpression): Relations {
   }
 }
 
-function processTargetList(targetList: SelectResTarget[], relations: Relations): Target[] {
+function processTargetList(targetList: ResTarget[], relations: Relations): Target[] {
   // First pass: map each SQL target column to a PostgREST target 1-to-1
   const flattenedColumnTargets: (ColumnTarget | AggregateTarget)[] = targetList.map((resTarget) => {
-    const target = processTarget(resTarget.ResTarget.val, relations)
-    target.alias = resTarget.ResTarget.name
+    if (!resTarget.val) {
+      throw new UnsupportedError(`Target list item must have a value`)
+    }
+
+    const target = processTarget(resTarget.val, relations)
+    target.alias = resTarget.name
 
     return target
   })
@@ -262,6 +338,10 @@ function processTargetList(targetList: SelectResTarget[], relations: Relations):
     // If there is no prefix, this column belongs to the primary relation at the top level
     if (!relationName) {
       return true
+    }
+
+    if (!columnName) {
+      throw new UnsupportedError(`Column name cannot be empty in target list`)
     }
 
     // If this column is part of a joined relation
@@ -318,18 +398,15 @@ function processTargetList(targetList: SelectResTarget[], relations: Relations):
   return [...columnTargets, ...nestedEmbeddedTargets]
 }
 
-function processTarget(
-  target: TypeCast | ColumnRef | FuncCall | A_Expr | A_Const,
-  relations: Relations
-): ColumnTarget | AggregateTarget {
+function processTarget(target: Node, relations: Relations): ColumnTarget | AggregateTarget {
   if ('TypeCast' in target) {
-    return processCast(target, relations)
+    return processCast(target.TypeCast, relations)
   } else if ('ColumnRef' in target) {
-    return processColumn(target, relations)
+    return processColumn(target.ColumnRef, relations)
   } else if ('A_Expr' in target) {
-    return processExpression(target, relations)
+    return processExpression(target.A_Expr, relations)
   } else if ('FuncCall' in target) {
-    return processFunctionCall(target, relations)
+    return processFunctionCall(target.FuncCall, relations)
   } else {
     throw new UnsupportedError(
       'Only columns, JSON fields, and aggregates are supported as query targets'
@@ -349,15 +426,30 @@ function mapJoinType(joinType: string) {
 }
 
 function processCast(target: TypeCast, relations: Relations) {
-  const cast = renderDataType(target.TypeCast.typeName.names)
+  if (!target.typeName?.names) {
+    throw new UnsupportedError('Type cast must have a type name')
+  }
 
-  if ('A_Const' in target.TypeCast.arg) {
+  const names = target.typeName.names.map((name) => {
+    if (!('String' in name)) {
+      throw new UnsupportedError('Type cast name must be a string')
+    }
+    return name.String
+  })
+
+  const cast = renderDataType(names)
+
+  if (!target.arg) {
+    throw new UnsupportedError('Type cast must have an argument')
+  }
+
+  if ('A_Const' in target.arg) {
     throw new UnsupportedError(
       'Only columns, JSON fields, and aggregates are supported as query targets'
     )
   }
 
-  const nestedTarget = processTarget(target.TypeCast.arg, relations)
+  const nestedTarget = processTarget(target.arg, relations)
 
   const { type } = nestedTarget
 
@@ -377,9 +469,13 @@ function processCast(target: TypeCast, relations: Relations) {
 }
 
 function processColumn(target: ColumnRef, relations: Relations): ColumnTarget {
+  if (!target.fields) {
+    throw new UnsupportedError('Column reference must have fields')
+  }
+
   return {
     type: 'column-target',
-    column: renderFields(target.ColumnRef.fields, relations),
+    column: renderFields(target.fields, relations),
   }
 }
 
@@ -396,7 +492,11 @@ function processExpression(target: A_Expr, relations: Relations): ColumnTarget {
 }
 
 function processFunctionCall(target: FuncCall, relations: Relations): AggregateTarget {
-  const functionName = renderFields(target.FuncCall.funcname, relations)
+  if (!target.funcname) {
+    throw new UnsupportedError('Aggregate function must have a name')
+  }
+
+  const functionName = renderFields(target.funcname, relations)
 
   if (!supportedAggregateFunctions.includes(functionName)) {
     throw new UnsupportedError(
@@ -405,22 +505,26 @@ function processFunctionCall(target: FuncCall, relations: Relations): AggregateT
   }
 
   // The `count(*)` special case that has no columns attached
-  if (functionName === 'count' && !target.FuncCall.args && target.FuncCall.agg_star) {
+  if (functionName === 'count' && !target.args && target.agg_star) {
     return {
       type: 'aggregate-target',
       functionName,
     }
   }
 
-  if (!target.FuncCall.args) {
+  if (!target.args) {
     throw new UnsupportedError(`Aggregate function '${functionName}' requires a column argument`)
   }
 
-  if (target.FuncCall.args && target.FuncCall.args.length > 1) {
+  if (target.args && target.args.length > 1) {
     throw new UnsupportedError(`Aggregate functions only accept one argument`)
   }
 
-  const [arg] = target.FuncCall.args
+  const [arg] = target.args
+
+  if (!arg) {
+    throw new UnsupportedError(`Aggregate function '${functionName}' requires a column argument`)
+  }
 
   const nestedTarget = processTarget(arg, relations)
 

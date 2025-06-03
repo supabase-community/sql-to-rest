@@ -1,7 +1,7 @@
-import { describe, expect, test } from '@jest/globals'
 import { stripIndent, stripIndents } from 'common-tags'
-import { processSql } from '../processor'
-import { renderSupabaseJs } from './supabase-js'
+import { describe, expect, test } from 'vitest'
+import { processSql } from '../processor/index.js'
+import { renderSupabaseJs } from './supabase-js.js'
 
 describe('select', () => {
   test('specified columns', async () => {

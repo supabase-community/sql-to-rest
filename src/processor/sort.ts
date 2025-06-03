@@ -1,30 +1,46 @@
-import { UnsupportedError } from '../errors'
-import { SortBy } from '../types/libpg-query'
-import { Relations, Sort } from './types'
-import { processJsonTarget, renderFields } from './util'
+import type { SortBy } from '@supabase/pg-parser/17/types'
+import { UnsupportedError } from '../errors.js'
+import type { Relations, Sort } from './types.js'
+import { processJsonTarget, renderFields } from './util.js'
 
 export function processSortClause(sorts: SortBy[], relations: Relations): Sort[] {
   return sorts.map((sortBy) => {
     let column: string
 
-    if ('A_Expr' in sortBy.SortBy.node) {
+    if (!sortBy.node) {
+      throw new UnsupportedError(`ORDER BY clause must reference a column`)
+    }
+
+    if ('A_Expr' in sortBy.node) {
       try {
-        const target = processJsonTarget(sortBy.SortBy.node, relations)
+        const target = processJsonTarget(sortBy.node.A_Expr, relations)
         column = target.column
       } catch (err) {
         throw new UnsupportedError(`ORDER BY clause must reference a column`)
       }
-    } else if ('ColumnRef' in sortBy.SortBy.node) {
-      const { fields } = sortBy.SortBy.node.ColumnRef
+    } else if ('ColumnRef' in sortBy.node) {
+      const { fields } = sortBy.node.ColumnRef
+      if (!fields) {
+        throw new UnsupportedError(`ORDER BY clause must reference a column`)
+      }
       column = renderFields(fields, relations, 'parenthesis')
-    } else if ('TypeCast' in sortBy.SortBy.node) {
+    } else if ('TypeCast' in sortBy.node) {
       throw new UnsupportedError('Casting is not supported in the ORDER BY clause')
     } else {
       throw new UnsupportedError(`ORDER BY clause must reference a column`)
     }
 
-    const direction = mapSortByDirection(sortBy.SortBy.sortby_dir)
-    const nulls = mapSortByNulls(sortBy.SortBy.sortby_nulls)
+    if (!sortBy.sortby_dir) {
+      throw new UnsupportedError(`ORDER BY clause must specify a direction`)
+    }
+
+    const direction = mapSortByDirection(sortBy.sortby_dir)
+
+    if (!sortBy.sortby_nulls) {
+      throw new UnsupportedError(`ORDER BY clause must specify nulls handling`)
+    }
+
+    const nulls = mapSortByNulls(sortBy.sortby_nulls)
 
     return {
       column,
