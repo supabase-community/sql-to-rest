@@ -379,7 +379,7 @@ JSON columns (eg. `select metadata->'person'->>'name'`) are supported in the fol
 
 Thankfully no. We use [`pg-parser`](https://github.com/supabase-community/pg-parser) which compiles source code from the real PostgreSQL parser to WASM and wraps it in JavaScript bindings.
 
-This means we never have to worry about the SQL itself getting parsed incorrectly - it uses the exact same code as the actual PostgreSQL database. This library uses code from PostgreSQL 15.
+This means we never have to worry about the SQL itself getting parsed incorrectly - it uses the exact same code as the actual PostgreSQL database. This library uses code from PostgreSQL 17.
 
 ### SQL is a very open language - how can it all translate to REST?
 
