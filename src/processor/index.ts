@@ -6,7 +6,10 @@ import {
   UnsupportedError,
   getParsingErrorHint,
 } from '../errors.js'
-import { processSelectStatement } from './select.js'
+import { processSelectStatement } from './select'
+import { processInsertStatement } from './insert'
+import { processUpdateStatement } from './update'
+import { processDeleteStatement } from './delete'
 import type { Statement } from './types.js'
 
 export { supportedAggregateFunctions } from './select.js'
@@ -68,11 +71,11 @@ function processStatement({ stmt }: RawStmt): Statement {
   if ('SelectStmt' in stmt) {
     return processSelectStatement(stmt.SelectStmt)
   } else if ('InsertStmt' in stmt) {
-    throw new UnimplementedError(`Insert statements are not yet implemented by the translator`)
+    return processInsertStatement(stmt)
   } else if ('UpdateStmt' in stmt) {
-    throw new UnimplementedError(`Update statements are not yet implemented by the translator`)
+    return processUpdateStatement(stmt)
   } else if ('DeleteStmt' in stmt) {
-    throw new UnimplementedError(`Delete statements are not yet implemented by the translator`)
+    return processDeleteStatement(stmt)
   } else if ('ExplainStmt' in stmt) {
     throw new UnimplementedError(`Explain statements are not yet implemented by the translator`)
   } else {

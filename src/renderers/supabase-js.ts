@@ -3,7 +3,7 @@ import * as babel from 'prettier/plugins/babel'
 import * as estree from 'prettier/plugins/estree'
 import * as prettier from 'prettier/standalone'
 import { RenderError } from '../errors.js'
-import type { Filter, Select, Statement } from '../processor/index.js'
+import { Filter, Select, Insert, Update, Delete, Statement } from '../processor'
 import { renderNestedFilter, renderTargets } from './util.js'
 
 export type SupabaseJsQuery = {
@@ -17,8 +17,12 @@ export async function renderSupabaseJs(processed: Statement): Promise<SupabaseJs
   switch (processed.type) {
     case 'select':
       return formatSelect(processed)
-    default:
-      throw new RenderError(`Unsupported statement type '${processed.type}'`, 'supabase-js')
+    case 'insert':
+      return formatInsert(processed)
+    case 'update':
+      return formatUpdate(processed)
+    case 'delete':
+      return formatDelete(processed)
   }
 }
 
@@ -178,5 +182,106 @@ function mapTextSearchType(operator: 'fts' | 'plfts' | 'phfts' | 'wfts') {
       return 'websearch'
     default:
       return undefined
+  }
+}
+
+async function formatInsert(insert: Insert): Promise<SupabaseJsQuery> {
+  const { into, columns, values, returning } = insert
+  const lines = ['const { data, error } = await supabase', `.from('${into}')`]
+
+  // Convert values to objects
+  const body = values.map(row => {
+    const obj: Record<string, any> = {}
+    columns.forEach((col, index) => {
+      obj[col] = row[index]
+    })
+    return obj
+  })
+
+  if (body.length === 1) {
+    lines.push(`.insert(${JSON.stringify(body[0])})`)
+  } else {
+    lines.push(`.insert(${JSON.stringify(body)})`)
+  }
+
+  // Handle RETURNING clause
+  if (returning && returning.length > 0) {
+    lines.push(`.select('${returning.join(',')}')`)
+  }
+
+  // Join lines together and format
+  const code = await prettier.format(lines.join('\n'), {
+    parser: 'babel',
+    plugins: [babel, estree],
+    printWidth: 40,
+    semi: false,
+    singleQuote: true,
+    trailingComma: 'all',
+  })
+
+  return {
+    code: code.trim(),
+  }
+}
+
+async function formatUpdate(update: Update): Promise<SupabaseJsQuery> {
+  const { table, set, filter, returning } = update
+  const lines = ['const { data, error } = await supabase', `.from('${table}')`]
+
+  lines.push(`.update(${JSON.stringify(set)})`)
+
+  // Add filters
+  if (filter) {
+    renderFilterRoot(lines, filter)
+  }
+
+  // Handle RETURNING clause
+  if (returning && returning.length > 0) {
+    lines.push(`.select('${returning.join(',')}')`)
+  }
+
+  // Join lines together and format
+  const code = await prettier.format(lines.join('\n'), {
+    parser: 'babel',
+    plugins: [babel, estree],
+    printWidth: 40,
+    semi: false,
+    singleQuote: true,
+    trailingComma: 'all',
+  })
+
+  return {
+    code: code.trim(),
+  }
+}
+
+async function formatDelete(deleteStmt: Delete): Promise<SupabaseJsQuery> {
+  const { from, filter, returning } = deleteStmt
+  const lines = ['const { data, error } = await supabase', `.from('${from}')`]
+
+  lines.push('.delete()')
+
+  // Add filters
+  if (filter) {
+    renderFilterRoot(lines, filter)
+  }
+
+  // Handle RETURNING clause
+  if (returning && returning.length > 0) {
+    lines.push(`.select('${returning.join(',')}')`)
+  }
+
+  // Join lines together and format
+  const code = await prettier.format(lines.join('\n'), {
+    parser: 'babel',
+    plugins: [babel, estree],
+    printWidth: 40,
+    semi: false,
+    singleQuote: true,
+    trailingComma: 'all',
+  })
+
+  return {
+    code: code.trim(),
   }
 }

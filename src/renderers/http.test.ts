@@ -2038,3 +2038,126 @@ describe('select', () => {
     await expect(processSql(sql)).rejects.toThrowError()
   })
 })
+
+describe('insert', () => {
+  test('insert single row', async () => {
+    const sql = stripIndents`
+      insert into books (title, author)
+      values ('The Great Gatsby', 'F. Scott Fitzgerald')
+    `
+
+    const statement = await processSql(sql)
+    const { method, fullPath, body } = await renderHttp(statement)
+
+    expect(method).toBe('POST')
+    expect(fullPath).toBe('/books')
+    expect(body).toEqual({
+      title: 'The Great Gatsby',
+      author: 'F. Scott Fitzgerald'
+    })
+  })
+
+  test('insert multiple rows', async () => {
+    const sql = stripIndents`
+      insert into books (title, author)
+      values 
+        ('The Great Gatsby', 'F. Scott Fitzgerald'),
+        ('To Kill a Mockingbird', 'Harper Lee')
+    `
+
+    const statement = await processSql(sql)
+    const { method, fullPath, body } = await renderHttp(statement)
+
+    expect(method).toBe('POST')
+    expect(fullPath).toBe('/books')
+    expect(body).toEqual([
+      { title: 'The Great Gatsby', author: 'F. Scott Fitzgerald' },
+      { title: 'To Kill a Mockingbird', author: 'Harper Lee' }
+    ])
+  })
+
+  test('insert with returning', async () => {
+    const sql = stripIndents`
+      insert into books (title, author)
+      values ('The Great Gatsby', 'F. Scott Fitzgerald')
+      returning id, title
+    `
+
+    const statement = await processSql(sql)
+    const { method, fullPath, body, params } = await renderHttp(statement)
+
+    expect(method).toBe('POST')
+    expect(fullPath).toBe('/books?select=id,title')
+    expect(body).toEqual({
+      title: 'The Great Gatsby',
+      author: 'F. Scott Fitzgerald'
+    })
+    expect(params.get('select')).toBe('id,title')
+  })
+})
+
+describe('update', () => {
+  test('update with where clause', async () => {
+    const sql = stripIndents`
+      update books
+      set title = 'Updated Title'
+      where id = 1
+    `
+
+    const statement = await processSql(sql)
+    const { method, fullPath, body, params } = await renderHttp(statement)
+
+    expect(method).toBe('PATCH')
+    expect(fullPath).toBe('/books?id=eq.1')
+    expect(body).toEqual({ title: 'Updated Title' })
+    expect(params.get('id')).toBe('eq.1')
+  })
+
+  test('update with returning', async () => {
+    const sql = stripIndents`
+      update books
+      set title = 'Updated Title'
+      where id = 1
+      returning id, title
+    `
+
+    const statement = await processSql(sql)
+    const { method, fullPath, body, params } = await renderHttp(statement)
+
+    expect(method).toBe('PATCH')
+    expect(fullPath).toBe('/books?select=id,title&id=eq.1')
+    expect(body).toEqual({ title: 'Updated Title' })
+    expect(params.get('select')).toBe('id,title')
+  })
+})
+
+describe('delete', () => {
+  test('delete with where clause', async () => {
+    const sql = stripIndents`
+      delete from books
+      where id = 1
+    `
+
+    const statement = await processSql(sql)
+    const { method, fullPath, params } = await renderHttp(statement)
+
+    expect(method).toBe('DELETE')
+    expect(fullPath).toBe('/books?id=eq.1')
+    expect(params.get('id')).toBe('eq.1')
+  })
+
+  test('delete with returning', async () => {
+    const sql = stripIndents`
+      delete from books
+      where id = 1
+      returning id, title
+    `
+
+    const statement = await processSql(sql)
+    const { method, fullPath, params } = await renderHttp(statement)
+
+    expect(method).toBe('DELETE')
+    expect(fullPath).toBe('/books?select=id,title&id=eq.1')
+    expect(params.get('select')).toBe('id,title')
+  })
+})

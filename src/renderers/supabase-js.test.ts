@@ -1066,3 +1066,150 @@ describe('select', () => {
     await expect(processSql(sql)).rejects.toThrowError()
   })
 })
+
+describe('insert', () => {
+  test('insert single row', async () => {
+    const sql = stripIndents`
+      insert into books (title, author)
+      values ('The Great Gatsby', 'F. Scott Fitzgerald')
+    `
+
+    const statement = await processSql(sql)
+    const { code } = await renderSupabaseJs(statement)
+
+    expect(code).toBe(stripIndent`
+      const { data, error } = await supabase
+        .from('books')
+        .insert({
+          title: 'The Great Gatsby',
+          author: 'F. Scott Fitzgerald',
+        })
+    `)
+  })
+
+  test('insert multiple rows', async () => {
+    const sql = stripIndents`
+      insert into books (title, author)
+      values 
+        ('The Great Gatsby', 'F. Scott Fitzgerald'),
+        ('To Kill a Mockingbird', 'Harper Lee')
+    `
+
+    const statement = await processSql(sql)
+    const { code } = await renderSupabaseJs(statement)
+
+    expect(code).toBe(stripIndent`
+      const { data, error } = await supabase
+        .from('books')
+        .insert([
+          {
+            title: 'The Great Gatsby',
+            author: 'F. Scott Fitzgerald',
+          },
+          {
+            title: 'To Kill a Mockingbird',
+            author: 'Harper Lee',
+          },
+        ])
+    `)
+  })
+
+  test('insert with returning', async () => {
+    const sql = stripIndents`
+      insert into books (title, author)
+      values ('The Great Gatsby', 'F. Scott Fitzgerald')
+      returning id, title
+    `
+
+    const statement = await processSql(sql)
+    const { code } = await renderSupabaseJs(statement)
+
+    expect(code).toBe(stripIndent`
+      const { data, error } = await supabase
+        .from('books')
+        .insert({
+          title: 'The Great Gatsby',
+          author: 'F. Scott Fitzgerald',
+        })
+        .select('id,title')
+    `)
+  })
+})
+
+describe('update', () => {
+  test('update with where clause', async () => {
+    const sql = stripIndents`
+      update books
+      set title = 'Updated Title'
+      where id = 1
+    `
+
+    const statement = await processSql(sql)
+    const { code } = await renderSupabaseJs(statement)
+
+    expect(code).toBe(stripIndent`
+      const { data, error } = await supabase
+        .from('books')
+        .update({ title: 'Updated Title' })
+        .eq('id', 1)
+    `)
+  })
+
+  test('update with returning', async () => {
+    const sql = stripIndents`
+      update books
+      set title = 'Updated Title'
+      where id = 1
+      returning id, title
+    `
+
+    const statement = await processSql(sql)
+    const { code } = await renderSupabaseJs(statement)
+
+    expect(code).toBe(stripIndent`
+      const { data, error } = await supabase
+        .from('books')
+        .update({ title: 'Updated Title' })
+        .eq('id', 1)
+        .select('id,title')
+    `)
+  })
+})
+
+describe('delete', () => {
+  test('delete with where clause', async () => {
+    const sql = stripIndents`
+      delete from books
+      where id = 1
+    `
+
+    const statement = await processSql(sql)
+    const { code } = await renderSupabaseJs(statement)
+
+    expect(code).toBe(stripIndent`
+      const { data, error } = await supabase
+        .from('books')
+        .delete()
+        .eq('id', 1)
+    `)
+  })
+
+  test('delete with returning', async () => {
+    const sql = stripIndents`
+      delete from books
+      where id = 1
+      returning id, title
+    `
+
+    const statement = await processSql(sql)
+    const { code } = await renderSupabaseJs(statement)
+
+    expect(code).toBe(stripIndent`
+      const { data, error } = await supabase
+        .from('books')
+        .delete()
+        .eq('id', 1)
+        .select('id,title')
+    `)
+  })
+})

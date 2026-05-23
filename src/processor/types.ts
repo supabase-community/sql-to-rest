@@ -1,4 +1,4 @@
-export type Statement = Select
+export type Statement = Select | Insert | Update | Delete
 
 export type Select = {
   type: 'select'
@@ -207,4 +207,27 @@ export type Relations = {
     get reference(): string
   }
   joined: EmbeddedTarget[]
+}
+
+export type Insert = {
+  type: 'insert'
+  into: string
+  columns: string[]
+  values: (string | number | boolean | null)[][]
+  returning?: string[]  // basic RETURNING support
+}
+
+export type Update = {
+  type: 'update'
+  table: string
+  set: Record<string, string | number | boolean | null>
+  filter?: Filter  // reuse existing Filter type
+  returning?: string[]
+}
+
+export type Delete = {
+  type: 'delete'
+  from: string
+  filter?: Filter
+  returning?: string[]
 }

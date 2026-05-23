@@ -268,10 +268,10 @@ The rendered JS code is automatically formatted using `prettier`.
 #### Statements
 
 - [x] `select` statements ([`GET` requests](https://postgrest.org/en/latest/references/api/tables_views.html#read))
-- [ ] `insert` statements ([`POST` requests](https://postgrest.org/en/latest/references/api/tables_views.html#insert))
+- [x] `insert` statements ([`POST` requests](https://postgrest.org/en/latest/references/api/tables_views.html#insert))
   - [ ] `on conflict update` ([upsert](https://postgrest.org/en/latest/references/api/tables_views.html#upsert))
-- [ ] `update` statements ([`PATCH` requests](https://postgrest.org/en/latest/references/api/tables_views.html#update))
-- [ ] `delete` statements ([`DELETE` requests](https://postgrest.org/en/latest/references/api/tables_views.html#delete))
+- [x] `update` statements ([`PATCH` requests](https://postgrest.org/en/latest/references/api/tables_views.html#update))
+- [x] `delete` statements ([`DELETE` requests](https://postgrest.org/en/latest/references/api/tables_views.html#delete))
 - [ ] `explain` statements ([Execution plan](https://postgrest.org/en/latest/references/observability.html#execution-plan))
 
 #### [Filters](https://postgrest.org/en/latest/references/api/tables_views.html#horizontal-filtering)
